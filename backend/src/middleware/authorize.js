@@ -12,7 +12,7 @@ const authorize = (...allowedRoles) => {
   return (req, _res, next) => {
     if (!req.user) {
       return next(
-        ApiError.unauthorized("Authentication required before authorization")
+        ApiError.unauthorized("Authentication required before authorization")  /* IF THERE IS NO USER -> user not logged in */
       );
     }
 
