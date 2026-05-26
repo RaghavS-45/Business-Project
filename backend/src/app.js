@@ -8,6 +8,9 @@ import logger from "./config/logger.js";
 
 // ─── Route Imports ────────────────────────────────────────
 import authRoutes from "./routes/auth.routes.js";
+import productRoutes from "./routes/product.routes.js";
+import vendorRoutes from "./routes/vendor.routes.js";
+import customerRoutes from "./routes/customer.routes.js";
 
 /**
  * Express Application
@@ -59,6 +62,9 @@ app.get("/api/health", (_req, res) => {
 
 // ─── API Routes ───────────────────────────────────────────
 app.use("/api/auth", authRoutes);
+app.use("/api/products", productRoutes);
+app.use("/api/vendors", vendorRoutes);
+app.use("/api/customers", customerRoutes);
 
 // ─── 404 Handler ──────────────────────────────────────────
 app.use((_req, res) => {
