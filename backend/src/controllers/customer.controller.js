@@ -10,7 +10,7 @@ class CustomerController {
    */
   async create(req, res, next) {
     try {
-      const customer = await customerService.create(req.body);
+      const customer = await customerService.create(req.body, req.user._id);
       res.status(201).json({
         success: true,
         message: "Customer created successfully",
@@ -60,7 +60,7 @@ class CustomerController {
    */
   async update(req, res, next) {
     try {
-      const customer = await customerService.update(req.params.id, req.body);
+      const customer = await customerService.update(req.params.id, req.body, req.user._id);
       res.status(200).json({
         success: true,
         message: "Customer updated successfully",
@@ -78,7 +78,7 @@ class CustomerController {
    */
   async delete(req, res, next) {
     try {
-      const result = await customerService.delete(req.params.id);
+      const result = await customerService.delete(req.params.id, req.user._id);
       res.status(200).json({
         success: true,
         ...result,

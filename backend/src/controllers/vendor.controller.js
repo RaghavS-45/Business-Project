@@ -10,7 +10,7 @@ class VendorController {
    */
   async create(req, res, next) {
     try {
-      const vendor = await vendorService.create(req.body);
+      const vendor = await vendorService.create(req.body, req.user._id);
       res.status(201).json({
         success: true,
         message: "Vendor created successfully",
@@ -60,7 +60,7 @@ class VendorController {
    */
   async update(req, res, next) {
     try {
-      const vendor = await vendorService.update(req.params.id, req.body);
+      const vendor = await vendorService.update(req.params.id, req.body, req.user._id);
       res.status(200).json({
         success: true,
         message: "Vendor updated successfully",
@@ -78,7 +78,7 @@ class VendorController {
    */
   async delete(req, res, next) {
     try {
-      const result = await vendorService.delete(req.params.id);
+      const result = await vendorService.delete(req.params.id, req.user._id);
       res.status(200).json({
         success: true,
         ...result,

@@ -15,7 +15,7 @@ class ProductController {
    */
   async create(req, res, next) {
     try {
-      const product = await productService.create(req.body, req.files ?? []);
+      const product = await productService.create(req.body, req.files ?? [], req.user._id);
       res.status(201).json({
         success: true,
         message: "Product created successfully",
@@ -112,7 +112,8 @@ class ProductController {
       const product = await productService.update(
         req.params.id,
         req.body,
-        req.files ?? []
+        req.files ?? [],
+        req.user._id
       );
       res.status(200).json({
         success: true,
@@ -152,7 +153,7 @@ class ProductController {
    */
   async delete(req, res, next) {
     try {
-      const result = await productService.delete(req.params.id);
+      const result = await productService.delete(req.params.id, req.user._id);
       res.status(200).json({
         success: true,
         ...result,

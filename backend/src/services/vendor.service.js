@@ -1,6 +1,7 @@
 import Vendor from "../models/Vendor.js";
 import ApiError from "../utils/ApiError.js";
 import logger from "../config/logger.js";
+import { addJob, QUEUE_NAMES } from "../config/queue.js";
 
 /**
  * Vendor Service — business logic layer.
@@ -10,7 +11,7 @@ class VendorService {
   /**
    * Create a new vendor.
    */
-  async create(data) {
+  async create(data, userId = null) {
     if (data.email) {
       const existing = await Vendor.findOne({ email: data.email });
       if (existing) throw ApiError.conflict("A vendor with this email already exists");
@@ -23,6 +24,19 @@ class VendorService {
 
     const vendor = await Vendor.create(data);
     logger.info(`Vendor created: ${vendor.name}`);
+
+    if (userId) {
+      await addJob(QUEUE_NAMES.AUDIT_LOG, "vendor-create", {
+        action: "CREATE",
+        entity: "Vendor",
+        entityId: vendor._id.toString(),
+        userId: userId.toString(),
+        before: null,
+        after: vendor.toJSON(),
+        metadata: {},
+      });
+    }
+
     return vendor;
   }
 
@@ -68,9 +82,11 @@ class VendorService {
   /**
    * Update vendor fields.
    */
-  async update(id, data) {
+  async update(id, data, userId = null) {
     const vendor = await Vendor.findById(id);
     if (!vendor) throw ApiError.notFound("Vendor not found");
+
+    const beforeState = vendor.toJSON();
 
     if (data.email && data.email !== vendor.email) {
       const conflict = await Vendor.findOne({ email: data.email, _id: { $ne: id } });
@@ -86,20 +102,48 @@ class VendorService {
     await vendor.save();
 
     logger.info(`Vendor updated: ${vendor.name}`);
+
+    if (userId) {
+      await addJob(QUEUE_NAMES.AUDIT_LOG, "vendor-update", {
+        action: "UPDATE",
+        entity: "Vendor",
+        entityId: vendor._id.toString(),
+        userId: userId.toString(),
+        before: beforeState,
+        after: vendor.toJSON(),
+        metadata: {},
+      });
+    }
+
     return vendor.toJSON();
   }
 
   /**
    * Soft-delete a vendor.
    */
-  async delete(id) {
+  async delete(id, userId = null) {
     const vendor = await Vendor.findById(id);
     if (!vendor) throw ApiError.notFound("Vendor not found");
+
+    const beforeState = vendor.toJSON();
 
     vendor.isActive = false;
     await vendor.save();
 
     logger.info(`Vendor soft-deleted: ${vendor.name}`);
+
+    if (userId) {
+      await addJob(QUEUE_NAMES.AUDIT_LOG, "vendor-delete", {
+        action: "DELETE",
+        entity: "Vendor",
+        entityId: vendor._id.toString(),
+        userId: userId.toString(),
+        before: beforeState,
+        after: vendor.toJSON(),
+        metadata: {},
+      });
+    }
+
     return { message: "Vendor deleted successfully" };
   }
 }

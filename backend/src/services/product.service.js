@@ -3,6 +3,7 @@ import Product from "../models/Product.js";
 import cloudinary from "../config/cloudinary.js";
 import ApiError from "../utils/ApiError.js";
 import logger from "../config/logger.js";
+import { addJob, QUEUE_NAMES } from "../config/queue.js";
 
 /**
  * Product Service — business logic layer.
@@ -58,7 +59,7 @@ class ProductService {
   /**
    * Create a new product, optionally uploading images to Cloudinary.
    */
-  async create(data, files = []) {
+  async create(data, files = [], userId = null) {
     const existingSkuCheck = data.sku
       ? await Product.findOne({ sku: data.sku.toUpperCase() })
       : null;
@@ -79,6 +80,20 @@ class ProductService {
     const product = await Product.create({ ...data, images });
 
     logger.info(`Product created: ${product.name} (SKU: ${product.sku})`);
+
+    // Enqueue audit log (fire-and-forget)
+    if (userId) {
+      await addJob(QUEUE_NAMES.AUDIT_LOG, "product-create", {
+        action: "CREATE",
+        entity: "Product",
+        entityId: product._id.toString(),
+        userId: userId.toString(),
+        before: null,
+        after: product.toJSON(),
+        metadata: { sku: product.sku },
+      });
+    }
+
     return product;
   }
 
@@ -174,9 +189,12 @@ class ProductService {
    * Update a product's data and optionally add new images.
    * Existing images are preserved unless explicitly deleted via deleteImage().
    */
-  async update(id, data, files = []) {
+  async update(id, data, files = [], userId = null) {
     const product = await Product.findById(id);
     if (!product) throw ApiError.notFound("Product not found");
+
+    // Snapshot before state for audit
+    const beforeState = product.toJSON();
 
     // Conflict checks for unique fields (only if value is changing)
     if (data.sku && data.sku.toUpperCase() !== product.sku) {
@@ -205,6 +223,20 @@ class ProductService {
     await product.save();
 
     logger.info(`Product updated: ${product.name} (${product.sku})`);
+
+    // Enqueue audit log
+    if (userId) {
+      await addJob(QUEUE_NAMES.AUDIT_LOG, "product-update", {
+        action: "UPDATE",
+        entity: "Product",
+        entityId: product._id.toString(),
+        userId: userId.toString(),
+        before: beforeState,
+        after: product.toJSON(),
+        metadata: { sku: product.sku },
+      });
+    }
+
     return product.toJSON();
   }
 
@@ -231,9 +263,12 @@ class ProductService {
   /**
    * Soft-delete a product and purge all its Cloudinary images.
    */
-  async delete(id) {
+  async delete(id, userId = null) {
     const product = await Product.findById(id);
     if (!product) throw ApiError.notFound("Product not found");
+
+    // Snapshot before state for audit
+    const beforeState = product.toJSON();
 
     // Delete all images from Cloudinary in parallel
     if (product.images.length > 0) {
@@ -247,6 +282,20 @@ class ProductService {
     await product.save();
 
     logger.info(`Product soft-deleted: ${product.name} (${product.sku})`);
+
+    // Enqueue audit log
+    if (userId) {
+      await addJob(QUEUE_NAMES.AUDIT_LOG, "product-delete", {
+        action: "DELETE",
+        entity: "Product",
+        entityId: product._id.toString(),
+        userId: userId.toString(),
+        before: beforeState,
+        after: product.toJSON(),
+        metadata: { sku: product.sku },
+      });
+    }
+
     return { message: "Product deleted successfully" };
   }
 

@@ -4,6 +4,7 @@ import helmet from "helmet";
 import env from "./config/env.js";
 import { apiLimiter } from "./middleware/rateLimiter.js";
 import errorHandler from "./middleware/errorHandler.js";
+import requestId from "./middleware/requestId.js";
 import logger from "./config/logger.js";
 
 // ─── Route Imports ────────────────────────────────────────
@@ -11,6 +12,8 @@ import authRoutes from "./routes/auth.routes.js";
 import productRoutes from "./routes/product.routes.js";
 import vendorRoutes from "./routes/vendor.routes.js";
 import customerRoutes from "./routes/customer.routes.js";
+import saleRoutes from "./routes/sale.routes.js";
+import auditRoutes from "./routes/audit.routes.js";
 
 /**
  * Express Application
@@ -19,7 +22,8 @@ import customerRoutes from "./routes/customer.routes.js";
  *   1. Helmet — sets security-related HTTP headers (CSP, HSTS, etc.)
  *   2. CORS — whitelist allowed origins
  *   3. Rate limiter — general API throttle (200 req/15min)
- *   4. Body parsers — JSON + URL-encoded with size limits
+ *   4. Request ID — UUID v4 for log correlation
+ *   5. Body parsers — JSON + URL-encoded with size limits
  *
  * Routes are mounted under /api/<resource>.
  * Global error handler sits at the bottom of the middleware stack.
@@ -37,6 +41,9 @@ app.use(
 );
 app.use(apiLimiter);
 
+// ─── Request ID (before body parsers & logging) ──────────
+app.use(requestId);
+
 // ─── Body Parsers ─────────────────────────────────────────
 app.use(express.json({ limit: "10kb" })); // prevent large payload attacks
 app.use(express.urlencoded({ extended: true, limit: "10kb" }));
@@ -44,6 +51,7 @@ app.use(express.urlencoded({ extended: true, limit: "10kb" }));
 // ─── Request Logging ──────────────────────────────────────
 app.use((req, _res, next) => {
   logger.http(`${req.method} ${req.originalUrl}`, {
+    requestId: req.requestId,
     ip: req.ip,
     userAgent: req.headers["user-agent"],
   });
@@ -65,6 +73,8 @@ app.use("/api/auth", authRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/vendors", vendorRoutes);
 app.use("/api/customers", customerRoutes);
+app.use("/api/sales", saleRoutes);
+app.use("/api/audit", auditRoutes);
 
 // ─── 404 Handler ──────────────────────────────────────────
 app.use((_req, res) => {
@@ -78,3 +88,4 @@ app.use((_req, res) => {
 app.use(errorHandler);
 
 export default app;
+

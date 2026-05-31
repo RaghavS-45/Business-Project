@@ -1,6 +1,7 @@
 import Customer from "../models/Customer.js";
 import ApiError from "../utils/ApiError.js";
 import logger from "../config/logger.js";
+import { addJob, QUEUE_NAMES } from "../config/queue.js";
 
 /**
  * Customer Service — business logic layer.
@@ -10,7 +11,7 @@ class CustomerService {
   /**
    * Create a new customer.
    */
-  async create(data) {
+  async create(data, userId = null) {
     if (data.email) {
       const existing = await Customer.findOne({ email: data.email });
       if (existing) throw ApiError.conflict("A customer with this email already exists");
@@ -23,6 +24,19 @@ class CustomerService {
 
     const customer = await Customer.create(data);
     logger.info(`Customer created: ${customer.name}`);
+
+    if (userId) {
+      await addJob(QUEUE_NAMES.AUDIT_LOG, "customer-create", {
+        action: "CREATE",
+        entity: "Customer",
+        entityId: customer._id.toString(),
+        userId: userId.toString(),
+        before: null,
+        after: customer.toJSON(),
+        metadata: {},
+      });
+    }
+
     return customer;
   }
 
@@ -68,9 +82,11 @@ class CustomerService {
   /**
    * Update customer fields.
    */
-  async update(id, data) {
+  async update(id, data, userId = null) {
     const customer = await Customer.findById(id);
     if (!customer) throw ApiError.notFound("Customer not found");
+
+    const beforeState = customer.toJSON();
 
     if (data.email && data.email !== customer.email) {
       const conflict = await Customer.findOne({ email: data.email, _id: { $ne: id } });
@@ -86,20 +102,48 @@ class CustomerService {
     await customer.save();
 
     logger.info(`Customer updated: ${customer.name}`);
+
+    if (userId) {
+      await addJob(QUEUE_NAMES.AUDIT_LOG, "customer-update", {
+        action: "UPDATE",
+        entity: "Customer",
+        entityId: customer._id.toString(),
+        userId: userId.toString(),
+        before: beforeState,
+        after: customer.toJSON(),
+        metadata: {},
+      });
+    }
+
     return customer.toJSON();
   }
 
   /**
    * Soft-delete a customer.
    */
-  async delete(id) {
+  async delete(id, userId = null) {
     const customer = await Customer.findById(id);
     if (!customer) throw ApiError.notFound("Customer not found");
+
+    const beforeState = customer.toJSON();
 
     customer.isActive = false;
     await customer.save();
 
     logger.info(`Customer soft-deleted: ${customer.name}`);
+
+    if (userId) {
+      await addJob(QUEUE_NAMES.AUDIT_LOG, "customer-delete", {
+        action: "DELETE",
+        entity: "Customer",
+        entityId: customer._id.toString(),
+        userId: userId.toString(),
+        before: beforeState,
+        after: customer.toJSON(),
+        metadata: {},
+      });
+    }
+
     return { message: "Customer deleted successfully" };
   }
 }
