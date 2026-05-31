@@ -44,6 +44,7 @@ const queues = {};
 const QUEUE_NAMES = {
   RECEIPT_GENERATION: "receipt-generation",
   AUDIT_LOG: "audit-log",
+  DEAD_LETTER: "dead-letter",
 };
 
 /**
@@ -92,4 +93,49 @@ const closeQueues = async () => {
   logger.info(`Closed ${names.length} BullMQ queue(s)`);
 };
 
-export { QUEUE_NAMES, addJob, getQueue, closeQueues };
+/**
+ * Move a permanently failed job to the dead-letter queue.
+ *
+ * Called by workers when a job exhausts all retry attempts.
+ * Preserves the original job data, queue name, error, and attempt
+ * metadata so an admin can inspect and replay later.
+ *
+ * @param {Object} job     - The failed BullMQ job
+ * @param {Error}  error   - The final error
+ * @param {string} sourceQueue - Name of the queue the job originated from
+ */
+const moveToDeadLetterQueue = async (job, error, sourceQueue) => {
+  try {
+    await addJob(QUEUE_NAMES.DEAD_LETTER, "dead-letter-entry", {
+      originalQueue: sourceQueue,
+      originalJobName: job.name,
+      originalJobId: job.id,
+      payload: job.data,
+      error: error?.message || "Unknown error",
+      stack: error?.stack || null,
+      attemptsMade: job.attemptsMade,
+      failedAt: new Date().toISOString(),
+    }, {
+      // DLQ jobs should not auto-expire — keep indefinitely for review
+      removeOnComplete: false,
+      removeOnFail: false,
+      attempts: 1, // Don't retry DLQ writes
+    });
+
+    logger.warn(`Job moved to DLQ: ${sourceQueue}/${job.name}`, {
+      jobId: job.id,
+      error: error?.message,
+      attemptsMade: job.attemptsMade,
+    });
+  } catch (dlqError) {
+    // Last resort — if even the DLQ write fails, log everything
+    logger.error("Failed to move job to DLQ", {
+      sourceQueue,
+      jobId: job?.id,
+      originalError: error?.message,
+      dlqError: dlqError.message,
+    });
+  }
+};
+
+export { QUEUE_NAMES, addJob, getQueue, closeQueues, moveToDeadLetterQueue };

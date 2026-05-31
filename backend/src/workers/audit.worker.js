@@ -1,6 +1,6 @@
 import { Worker } from "bullmq";
 import { createWorkerConnection } from "../config/redis.js";
-import { QUEUE_NAMES } from "../config/queue.js";
+import { QUEUE_NAMES, moveToDeadLetterQueue } from "../config/queue.js";
 import auditService from "../services/audit.service.js";
 import logger from "../config/logger.js";
 
@@ -14,7 +14,8 @@ import logger from "../config/logger.js";
  * Job payload:
  *   { action, entity, entityId, userId, before, after, metadata }
  *
- * On failure: retried 3x with exponential backoff, then logged as error.
+ * On failure: retried 3x with exponential backoff. If all retries exhaust,
+ * the job is moved to the dead-letter queue for admin inspection.
  */
 
 let auditWorker = null;
@@ -47,13 +48,18 @@ const startAuditWorker = () => {
     });
   });
 
-  auditWorker.on("failed", (job, err) => {
+  auditWorker.on("failed", async (job, err) => {
     logger.error(`Audit job failed: ${job?.id}`, {
       action: job?.data?.action,
       entity: job?.data?.entity,
       error: err.message,
       attemptsMade: job?.attemptsMade,
     });
+
+    // Move to DLQ when all retries are exhausted
+    if (job && job.attemptsMade >= (job.opts?.attempts ?? 3)) {
+      await moveToDeadLetterQueue(job, err, QUEUE_NAMES.AUDIT_LOG);
+    }
   });
 
   logger.info("Audit worker started");

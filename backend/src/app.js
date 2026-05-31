@@ -1,4 +1,5 @@
 import express from "express";
+import compression from "compression";
 import cors from "cors";
 import helmet from "helmet";
 import env from "./config/env.js";
@@ -14,6 +15,7 @@ import vendorRoutes from "./routes/vendor.routes.js";
 import customerRoutes from "./routes/customer.routes.js";
 import saleRoutes from "./routes/sale.routes.js";
 import auditRoutes from "./routes/audit.routes.js";
+import dlqRoutes from "./routes/dlq.routes.js";
 
 /**
  * Express Application
@@ -32,13 +34,41 @@ import auditRoutes from "./routes/audit.routes.js";
 const app = express();
 
 // ─── Security Middleware ──────────────────────────────────
-app.use(helmet());
+app.use(
+  helmet({
+    // Stricter referrer policy — don't leak paths to external origins
+    referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+    // Restrict browser features the app doesn't need
+    permittedCrossDomainPolicies: { permittedPolicies: "none" },
+    // Prevent MIME-type sniffing
+    noSniff: true,
+    // Prevent click-jacking
+    frameguard: { action: "deny" },
+    // Cross-Origin policies for isolation
+    crossOriginOpenerPolicy: { policy: "same-origin" },
+    crossOriginResourcePolicy: { policy: "same-origin" },
+  })
+);
 app.use(
   cors({
     origin: env.CORS_ORIGIN,
     credentials: true,
   })
 );
+
+// ─── Compression ──────────────────────────────────────────
+// Gzip/deflate responses — ~60-70% size reduction on JSON payloads
+app.use(
+  compression({
+    threshold: 1024, // Only compress responses > 1KB
+    level: 6,        // Balanced speed/ratio (1-9)
+    filter: (req, res) =>
+      req.headers["x-no-compression"]
+        ? false
+        : compression.filter(req, res),
+  })
+);
+
 app.use(apiLimiter);
 
 // ─── Request ID (before body parsers & logging) ──────────
@@ -75,6 +105,7 @@ app.use("/api/vendors", vendorRoutes);
 app.use("/api/customers", customerRoutes);
 app.use("/api/sales", saleRoutes);
 app.use("/api/audit", auditRoutes);
+app.use("/api/admin/dlq", dlqRoutes);
 
 // ─── 404 Handler ──────────────────────────────────────────
 app.use((_req, res) => {

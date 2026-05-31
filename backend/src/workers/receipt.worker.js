@@ -1,6 +1,6 @@
 import { Worker } from "bullmq";
 import { createWorkerConnection } from "../config/redis.js";
-import { QUEUE_NAMES } from "../config/queue.js";
+import { QUEUE_NAMES, moveToDeadLetterQueue } from "../config/queue.js";
 import logger from "../config/logger.js";
 
 /**
@@ -17,8 +17,9 @@ import logger from "../config/logger.js";
  *   { saleId }
  *
  * On success: Sale document is updated with receiptUrl.
- * On failure: retried 3x, then logged as error. The sale is still
- *             valid — receipt can be regenerated manually later.
+ * On failure: retried 3x. If all retries exhaust, the job is moved to
+ *             the dead-letter queue. The sale is still valid — receipt
+ *             can be regenerated manually from the DLQ.
  */
 
 let receiptWorker = null;
@@ -55,12 +56,17 @@ const startReceiptWorker = () => {
     });
   });
 
-  receiptWorker.on("failed", (job, err) => {
+  receiptWorker.on("failed", async (job, err) => {
     logger.error(`Receipt generation failed: ${job?.id}`, {
       saleId: job?.data?.saleId,
       error: err.message,
       attemptsMade: job?.attemptsMade,
     });
+
+    // Move to DLQ when all retries are exhausted
+    if (job && job.attemptsMade >= (job.opts?.attempts ?? 3)) {
+      await moveToDeadLetterQueue(job, err, QUEUE_NAMES.RECEIPT_GENERATION);
+    }
   });
 
   logger.info("Receipt worker started");

@@ -7,7 +7,12 @@
   "scripts": {
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
-    "seed": "node src/seeds/seedAdmin.js"
+    "seed": "node src/seeds/seedAdmin.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:unit": "vitest run src/__tests__/unit",
+    "test:integration": "vitest run src/__tests__/integration",
+    "test:coverage": "vitest run --coverage"
   },
   "keywords": [
     "pos",
@@ -23,6 +28,7 @@
     "bullmq": "^5.77.6",
     "bwip-js": "^4.10.1",
     "cloudinary": "^2.10.0",
+    "compression": "^1.8.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
@@ -39,6 +45,9 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "nodemon": "^3.1.9"
+    "mongodb-memory-server": "^11.2.0",
+    "nodemon": "^3.1.9",
+    "supertest": "^7.2.2",
+    "vitest": "^4.1.7"
   }
 }
