@@ -1,5 +1,6 @@
 import { Worker } from "bullmq";
 import { createWorkerConnection } from "../config/redis.js";
+import { isRedisAvailable } from "../config/redis.js";
 import { QUEUE_NAMES, moveToDeadLetterQueue } from "../config/queue.js";
 import auditService from "../services/audit.service.js";
 import logger from "../config/logger.js";
@@ -7,20 +8,20 @@ import logger from "../config/logger.js";
 /**
  * Audit Log Worker
  *
- * Processes audit-log jobs asynchronously. This decouples audit writes
- * from the hot path — the main business operation (e.g. product update)
- * completes immediately and the audit entry is written in the background.
- *
- * Job payload:
- *   { action, entity, entityId, userId, before, after, metadata }
- *
- * On failure: retried 3x with exponential backoff. If all retries exhaust,
- * the job is moved to the dead-letter queue for admin inspection.
+ * Processes audit-log jobs asynchronously. Skipped if Redis is unavailable.
  */
 
 let auditWorker = null;
 
 const startAuditWorker = () => {
+  if (!isRedisAvailable()) {
+    logger.warn("Audit worker skipped — Redis unavailable");
+    return null;
+  }
+
+  const conn = createWorkerConnection();
+  if (!conn) return null;
+
   auditWorker = new Worker(
     QUEUE_NAMES.AUDIT_LOG,
     async (job) => {
@@ -36,8 +37,8 @@ const startAuditWorker = () => {
       return { success: true, auditAction: action, entity, entityId };
     },
     {
-      connection: createWorkerConnection(),
-      concurrency: 5, // Process up to 5 audit writes in parallel
+      connection: conn,
+      concurrency: 5,
     }
   );
 
@@ -56,7 +57,6 @@ const startAuditWorker = () => {
       attemptsMade: job?.attemptsMade,
     });
 
-    // Move to DLQ when all retries are exhausted
     if (job && job.attemptsMade >= (job.opts?.attempts ?? 3)) {
       await moveToDeadLetterQueue(job, err, QUEUE_NAMES.AUDIT_LOG);
     }
