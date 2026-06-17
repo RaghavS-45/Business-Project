@@ -1,0 +1,90 @@
+# ──────────────────────────────────────────────────────────
+#  Inventory POS — Full Stack Docker Compose
+#
+#  Usage:
+#    docker compose up --build          # Start everything
+#    docker compose down                # Stop everything
+#    docker compose down -v             # Stop + delete data
+#
+#  Services:
+#    frontend  → http://localhost:3000
+#    backend   → http://localhost:5000
+#    mongodb   → localhost:27017
+#    redis     → localhost:6379
+# ──────────────────────────────────────────────────────────
+
+services:
+  # ─── MongoDB ───────────────────────────────────────────
+  mongodb:
+    image: mongo:7
+    container_name: pos-mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.runCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ─── Redis ─────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: pos-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ─── Backend API ───────────────────────────────────────
+  backend:
+    build: ./backend
+    container_name: pos-backend
+    ports:
+      - "5000:5000"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      MONGO_URI: mongodb://mongodb:27017/inventory-pos
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-change-me-access-secret-at-least-16-chars}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-me-refresh-secret-at-least-16-chars}
+      JWT_ACCESS_EXPIRES_IN: 15m
+      JWT_REFRESH_EXPIRES_IN: 7d
+      LOGIN_RATE_LIMIT_WINDOW_MS: 900000
+      LOGIN_RATE_LIMIT_MAX: 5
+      CORS_ORIGIN: http://localhost:3000
+      REDIS_URL: redis://redis:6379
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-placeholder}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-placeholder}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-placeholder}
+      STORE_NAME: "Inventory POS"
+      STORE_PHONE: ""
+      STORE_ADDRESS: ""
+    restart: unless-stopped
+
+  # ─── Frontend (Nginx) ─────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: /api
+    container_name: pos-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  mongodb_data:

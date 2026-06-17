@@ -1,0 +1,10 @@
+node_modules
+npm-debug.log
+.env
+.env.docker
+logs/
+coverage/
+.DS_Store
+__tests__/
+vitest.config.js
+*.test.js

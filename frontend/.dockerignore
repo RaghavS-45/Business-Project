@@ -1,0 +1,9 @@
+node_modules
+dist
+npm-debug.log
+.DS_Store
+coverage/
+__tests__/
+vitest.config.ts
+*.test.tsx
+*.test.ts

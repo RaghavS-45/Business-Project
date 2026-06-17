@@ -8,8 +8,15 @@ import axios from "axios";
  *   and retries the original request. Queues concurrent 401s to avoid duplicate refreshes.
  */
 
+/**
+ * Base URL strategy:
+ *  - Dev: "/api" → Vite proxy forwards to localhost:5001
+ *  - Prod: VITE_API_URL env var (e.g. "https://your-app.onrender.com/api")
+ */
+const BASE_URL = import.meta.env.VITE_API_URL || "/api";
+
 const api = axios.create({
-  baseURL: "/api",
+  baseURL: BASE_URL,
   headers: {
     "Content-Type": "application/json",
   },
@@ -96,7 +103,7 @@ api.interceptors.response.use(
       const refreshToken = parsed?.state?.refreshToken;
       if (!refreshToken) throw new Error("No refresh token");
 
-      const { data } = await axios.post("/api/auth/refresh", { refreshToken });
+      const { data } = await axios.post(`${BASE_URL}/auth/refresh`, { refreshToken });
       const newAccessToken = data.data.accessToken;
       const newRefreshToken = data.data.refreshToken;
 
