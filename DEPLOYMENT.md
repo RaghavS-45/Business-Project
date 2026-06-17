@@ -88,29 +88,23 @@ git push -u origin main
    | **Start Command** | `node src/server.js` |
    | **Instance Type** | Free |
 
-4. **Add Environment Variables** (Settings → Environment):
+4. **Add Environment Variables** — the easy way:
 
-   | Variable | Value |
-   |----------|-------|
-   | `NODE_ENV` | `production` |
-   | `PORT` | `5000` |
-   | `MONGO_URI` | `mongodb+srv://...` (your Atlas connection string) |
-   | `JWT_ACCESS_SECRET` | (generate: `openssl rand -hex 48`) |
-   | `JWT_REFRESH_SECRET` | (generate: `openssl rand -hex 48`) |
-   | `JWT_ACCESS_EXPIRES_IN` | `15m` |
-   | `JWT_REFRESH_EXPIRES_IN` | `7d` |
-   | `LOGIN_RATE_LIMIT_WINDOW_MS` | `900000` |
-   | `LOGIN_RATE_LIMIT_MAX` | `5` |
-   | `CORS_ORIGIN` | (set after Vercel deploy — e.g. `https://your-app.vercel.app`) |
-   | `CLOUDINARY_CLOUD_NAME` | `dyw94xwuf` |
-   | `CLOUDINARY_API_KEY` | `586466667247482` |
-   | `CLOUDINARY_API_SECRET` | `JgZlEeacEdMyPLkIxpvFHzdchMI` |
-   | `REDIS_URL` | (see Redis setup below) |
-   | `STORE_NAME` | `Inventory POS` |
+   Render lets you paste an entire `.env` file at once:
 
-5. **Click "Create Web Service"** → Render will build and deploy
+   1. Go to your Web Service → **Environment** tab
+   2. Click **"Add from .env"** (top-right button)
+   3. Open [`backend/.env.render`](file:///Users/raghavsawhney/Desktop/Business-Project/backend/.env.render) and **copy-paste the entire contents**
+   4. Click **Save Changes**
 
-6. **Note your backend URL**: `https://inventory-pos-api.onrender.com`
+   > The `.env.render` file is pre-filled with your MongoDB Atlas and Cloudinary credentials, plus freshly generated JWT secrets. You only need to update **two values** after setup:
+   >
+   > | Variable | When to update |
+   > |----------|---------------|
+   > | `CORS_ORIGIN` | After deploying frontend on Vercel — set to `https://your-app.vercel.app` |
+   > | `REDIS_URL` | After creating a Render Redis instance — paste the Internal URL |
+
+   ⚠️ **This file is gitignored** (`.env.*` pattern) — it will never be pushed to GitHub.
 
 #### Redis on Render
 

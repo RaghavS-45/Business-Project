@@ -64,7 +64,7 @@ export function useSkuLookup() {
 export function useDebouncedValue(delay = 300) {
   const [value, setValue] = useState("");
   const [debouncedValue, setDebouncedValue] = useState("");
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const onChange = useCallback(
     (newValue: string) => {
