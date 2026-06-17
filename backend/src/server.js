@@ -6,20 +6,46 @@ import redisConnection, { connectRedis, isRedisAvailable } from "./config/redis.
 import { closeQueues } from "./config/queue.js";
 import { startAuditWorker, stopAuditWorker } from "./workers/audit.worker.js";
 import { startReceiptWorker, stopReceiptWorker } from "./workers/receipt.worker.js";
+import User from "./models/User.js";
 
 /**
  * Server Entry Point
  *
  * 1. Connect to MongoDB
- * 2. Try to connect to Redis (optional — server works without it)
- * 3. Start BullMQ workers if Redis is available
- * 4. Start Express server
- * 5. Handle graceful shutdown
+ * 2. Auto-seed admin user if none exists
+ * 3. Try to connect to Redis (optional — server works without it)
+ * 4. Start BullMQ workers if Redis is available
+ * 5. Start Express server
+ * 6. Handle graceful shutdown
  */
+
+const seedAdmin = async () => {
+  try {
+    const adminExists = await User.findOne({ role: "ADMIN" });
+    if (!adminExists) {
+      await User.create({
+        name: "System Admin",
+        email: "admin@inventory-pos.com",
+        password: "Admin@123456",
+        role: "ADMIN",
+      });
+      logger.info("✅ Default admin user created (admin@inventory-pos.com)");
+      logger.info("   ⚠️  Change this password after first login!");
+    }
+  } catch (err) {
+    // Don't crash the server if seeding fails (e.g. duplicate key on race)
+    if (err.code !== 11000) {
+      logger.error("Auto-seed failed:", err.message);
+    }
+  }
+};
 
 const startServer = async () => {
   // Connect to MongoDB
   await connectDB();
+
+  // Auto-seed admin user if none exists (safe for free-tier hosts with no shell)
+  await seedAdmin();
 
   // Try connecting to Redis (non-blocking — server starts regardless)
   await connectRedis();
