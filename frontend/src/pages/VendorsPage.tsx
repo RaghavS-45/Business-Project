@@ -18,7 +18,7 @@ import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
 interface VendorFormData {
-  companyName: string;
+  name: string;
   contactPerson?: string;
   email?: string;
   phone?: string;
@@ -41,10 +41,10 @@ export default function VendorsPage() {
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<VendorFormData>();
 
-  const openCreate = () => { setEditing(null); reset({ companyName: "", contactPerson: "", email: "", phone: "" }); setDialogOpen(true); };
+  const openCreate = () => { setEditing(null); reset({ name: "", contactPerson: "", email: "", phone: "" }); setDialogOpen(true); };
   const openEdit = (v: Record<string, unknown>) => {
     setEditing(v);
-    reset({ companyName: v.companyName as string, contactPerson: (v.contactPerson as string) || "", email: (v.email as string) || "", phone: (v.phone as string) || "" });
+    reset({ name: v.name as string, contactPerson: (v.contactPerson as string) || "", email: (v.email as string) || "", phone: (v.phone as string) || "" });
     setDialogOpen(true);
   };
 
@@ -106,9 +106,9 @@ export default function VendorsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {vendors.map((v: { _id: string; companyName: string; contactPerson?: string; email?: string; phone?: string }) => (
+              {vendors.map((v: { _id: string; name: string; contactPerson?: string; email?: string; phone?: string }) => (
                 <TableRow key={v._id} className="border-border/30 hover:bg-muted/20">
-                  <TableCell className="font-medium text-sm">{v.companyName}</TableCell>
+                  <TableCell className="font-medium text-sm">{v.name}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{v.contactPerson || "—"}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">{v.email || "—"}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">{v.phone || "—"}</TableCell>
@@ -117,7 +117,7 @@ export default function VendorsPage() {
                       <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => openEdit(v as unknown as Record<string, unknown>)}><Pencil className="mr-2 h-4 w-4" />Edit</DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleDelete(v._id, v.companyName)} className="text-destructive focus:text-destructive"><Trash2 className="mr-2 h-4 w-4" />Delete</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleDelete(v._id, v.name)} className="text-destructive focus:text-destructive"><Trash2 className="mr-2 h-4 w-4" />Delete</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
@@ -144,9 +144,9 @@ export default function VendorsPage() {
           <DialogHeader><DialogTitle>{editing ? "Edit Vendor" : "Add Vendor"}</DialogTitle></DialogHeader>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="v-name">Company Name *</Label>
-              <Input id="v-name" {...register("companyName", { required: "Required", minLength: { value: 2, message: "Min 2 chars" } })} />
-              {errors.companyName && <p className="text-xs text-destructive">{errors.companyName.message}</p>}
+              <Label htmlFor="v-name">name *</Label>
+              <Input id="v-name" {...register("name", { required: "Required", minLength: { value: 2, message: "Min 2 chars" } })} />
+              {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
             </div>
             <div className="space-y-2">
               <Label htmlFor="v-contact">Contact Person</Label>
