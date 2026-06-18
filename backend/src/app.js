@@ -46,12 +46,27 @@ app.use(
     frameguard: { action: "deny" },
     // Cross-Origin policies for isolation
     crossOriginOpenerPolicy: { policy: "same-origin" },
-    crossOriginResourcePolicy: { policy: "same-origin" },
+    crossOriginResourcePolicy: { policy: "cross-origin" },
   })
 );
 app.use(
   cors({
-    origin: env.CORS_ORIGIN,
+    origin: (origin, callback) => {
+      // Allow requests with no origin (e.g. curl, Postman, server-to-server)
+      if (!origin) return callback(null, true);
+
+      const allowed = env.CORS_ORIGIN;
+      // Support wildcard for easy initial deployment
+      if (allowed === "*") return callback(null, true);
+
+      // Support comma-separated origins
+      const origins = allowed.split(",").map((o) => o.trim());
+      if (origins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      callback(new Error(`CORS: ${origin} not allowed`));
+    },
     credentials: true,
   })
 );
