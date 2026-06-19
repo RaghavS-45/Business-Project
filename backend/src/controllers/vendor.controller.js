@@ -10,7 +10,20 @@ class VendorController {
    */
   async create(req, res, next) {
     try {
-      const vendor = await vendorService.create(req.body, req.user._id);
+
+      const vendorData = { ...req.body };
+
+      // Cleanse GSTIN
+      if (!vendorData.gstin || vendorData.gstin === "" || vendorData.gstin === null) {
+        vendorData.gstin = undefined;
+      }
+
+      // Cleanse Email
+      if (!vendorData.email || vendorData.email === "" || vendorData.email === null) {
+        vendorData.email = undefined;
+      }
+
+      const vendor = await vendorService.create(vendorData, req.user._id);
       res.status(201).json({
         success: true,
         message: "Vendor created successfully",
@@ -60,7 +73,21 @@ class VendorController {
    */
   async update(req, res, next) {
     try {
-      const vendor = await vendorService.update(req.params.id, req.body, req.user._id);
+      const vendorData = { ...req.body };
+
+      // 2. Cleanse GSTIN
+      if (!vendorData.gstin || vendorData.gstin === "" || vendorData.gstin === null) {
+        vendorData.gstin = undefined;
+      }
+
+      // 3. Cleanse Email
+      if (!vendorData.email || vendorData.email === "" || vendorData.email === null) {
+        vendorData.email = undefined;
+      }
+
+      // 4. Pass the cleansed data to the service
+      const vendor = await vendorService.update(req.params.id, vendorData, req.user._id);
+
       res.status(200).json({
         success: true,
         message: "Vendor updated successfully",
