@@ -10,7 +10,19 @@ class CustomerController {
    */
   async create(req, res, next) {
     try {
-      const customer = await customerService.create(req.body, req.user._id);
+      const customerData = { ...req.body };
+
+      // Cleanse phone
+      if (!customerData.phone || customerData.phone === "" || customerData.phone === null) {
+        customerData.phone = undefined;
+      }
+
+      // Cleanse email
+      if (!customerData.email || customerData.email === "" || customerData.email === null) {
+        customerData.email = undefined;
+      }
+
+      const customer = await customerService.create(customerData, req.user._id);
       res.status(201).json({
         success: true,
         message: "Customer created successfully",
@@ -60,7 +72,19 @@ class CustomerController {
    */
   async update(req, res, next) {
     try {
-      const customer = await customerService.update(req.params.id, req.body, req.user._id);
+      const customerData = { ...req.body };
+
+      // Cleanse phone
+      if (!customerData.phone || customerData.phone === "" || customerData.phone === null) {
+        customerData.phone = undefined;
+      }
+
+      // Cleanse email
+      if (!customerData.email || customerData.email === "" || customerData.email === null) {
+        customerData.email = undefined;
+      }
+
+      const customer = await customerService.update(req.params.id, customerData, req.user._id);
       res.status(200).json({
         success: true,
         message: "Customer updated successfully",

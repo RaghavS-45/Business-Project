@@ -39,7 +39,6 @@ const customerSchema = new mongoose.Schema(
       unique: true,
       sparse: true,
       match: [/^\S+@\S+\.\S+$/, "Please provide a valid email"],
-      default: null,
     },
 
     phone: {
@@ -48,7 +47,6 @@ const customerSchema = new mongoose.Schema(
       unique: true,
       sparse: true,
       match: [/^[+\d\s\-().]{7,20}$/, "Please provide a valid phone number"],
-      default: null,
     },
 
     address: {
