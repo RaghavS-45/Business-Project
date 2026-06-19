@@ -6,10 +6,10 @@ import { z } from "zod";
 
 const addressSchema = z
   .object({
-    street: z.string().trim().max(200).optional().default(""),
-    city: z.string().trim().max(100).optional().default(""),
-    state: z.string().trim().max(100).optional().default(""),
-    pincode: z.string().trim().max(10).optional().default(""),
+    street: z.string().trim().max(200).optional().nullable().default(null),
+    city: z.string().trim().max(100).optional().nullable().default(null),
+    state: z.string().trim().max(100).optional().nullable().default(null),
+    pincode: z.string().trim().max(10).optional().nullable().default(null),
     country: z.string().trim().max(100).optional().default("India"),
   })
   .optional()
@@ -28,7 +28,8 @@ export const createVendorSchema = z.object({
     .trim()
     .max(100, "Contact person name must be at most 100 characters")
     .optional()
-    .default(""),
+    .nullable()
+    .default(null),
 
   email: z
     .string()
@@ -44,7 +45,8 @@ export const createVendorSchema = z.object({
     .trim()
     .regex(/^[+\d\s\-().]{7,20}$/, "Please provide a valid phone number")
     .optional()
-    .default(""),
+    .nullable()
+    .default(null),
 
   address: addressSchema,
 
@@ -72,7 +74,8 @@ export const createVendorSchema = z.object({
     .trim()
     .max(1000, "Notes must be at most 1000 characters")
     .optional()
-    .default(""),
+    .nullable()
+    .default(null),
 });
 
 // ─── Update ──────────────────────────────────────────────
