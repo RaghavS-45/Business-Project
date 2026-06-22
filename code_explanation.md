@@ -297,8 +297,13 @@ app.use(helmet());
 //   X-Frame-Options: DENY
 //   Content-Security-Policy: ...
 
-// 2. CORS — only allow our frontend
-app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));
+app.use(cors({
+  origin: [
+    "http://localhost:5174",
+    "https://business-project-livid.vercel.app"
+  ],
+  credentials: true
+}));
 
 // 3. Rate limiting — max 200 requests per 15 minutes per IP
 app.use(apiLimiter);

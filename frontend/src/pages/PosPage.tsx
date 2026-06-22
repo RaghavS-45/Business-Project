@@ -111,26 +111,7 @@ export default function PosPage() {
   const customers = customersData?.customers || customersData?.docs || [];
 
   // Keyboard shortcuts
-  const shortcuts = useMemo(
-    () => ({
-      F2: () => searchRef.current?.focus(),
-      F4: () => setCustomerOpen(true),
-      F8: () => {
-        const methods = ["CASH", "CARD", "UPI", "OTHER"] as const;
-        const idx = methods.indexOf(paymentMethod);
-        setPaymentMethod(methods[(idx + 1) % methods.length]);
-      },
-      F9: () => {
-        if (cartItems.length > 0) setCheckoutOpen(true);
-      },
-      Escape: () => {
-        if (checkoutOpen) setCheckoutOpen(false);
-        else if (searchValue) setSearchValue("");
-      },
-    }),
-    [paymentMethod, cartItems.length, checkoutOpen, searchValue, setPaymentMethod, setSearchValue]
-  );
-  useKeyboardShortcuts(shortcuts);
+  
 
   const handleAddToCart = useCallback(
     (product: {
@@ -206,39 +187,15 @@ export default function PosPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               ref={searchRef}
-              placeholder="Search products (F2)..."
+              placeholder="Search products"
               value={searchValue}
               onChange={(e) => setSearchValue(e.target.value)}
               className="pl-9 pr-16"
             />
-            <Badge
-              variant="outline"
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground"
-            >
-              F2
-            </Badge>
+            
           </div>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setShowShortcuts(!showShortcuts)}
-            className="shrink-0"
-            title="Keyboard shortcuts"
-          >
-            <Keyboard className="h-4 w-4" />
-          </Button>
+         
         </div>
-
-        {/* Shortcut hints */}
-        {showShortcuts && (
-          <div className="flex flex-wrap gap-2 mb-3 text-xs text-muted-foreground">
-            <Badge variant="outline" className="text-[10px]">F2 Search</Badge>
-            <Badge variant="outline" className="text-[10px]">F4 Customer</Badge>
-            <Badge variant="outline" className="text-[10px]">F8 Payment</Badge>
-            <Badge variant="outline" className="text-[10px]">F9 Checkout</Badge>
-            <Badge variant="outline" className="text-[10px]">Esc Close</Badge>
-          </div>
-        )}
 
         {/* Category tabs */}
         <div className="flex gap-1.5 overflow-x-auto pb-2 mb-3 scrollbar-hide">
@@ -370,12 +327,12 @@ export default function PosPage() {
                 className="w-full justify-start text-xs"
               >
                 <User className="h-3.5 w-3.5 mr-2" />
-                {customerName || "Walk-in Customer (F4)"}
+                {customerName || "Walk-in Customer"}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-[300px] p-0" align="start">
               <Command>
-                <CommandInput placeholder="Search customers..." />
+                <CommandInput placeholder="Search customers" />
                 <CommandList>
                   <CommandEmpty>No customers found.</CommandEmpty>
                   <CommandGroup>
