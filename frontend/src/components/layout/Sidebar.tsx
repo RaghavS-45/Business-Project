@@ -9,6 +9,7 @@ import {
   Truck,
   ChevronLeft,
   ChevronRight,
+  UserCog,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -57,6 +58,12 @@ const navItems = [
     icon: Truck,
     path: "/vendors",
     roles: ["ADMIN", "MANAGER"],
+  },
+  {
+    label: "Team",
+    icon: UserCog,  // import from lucide-react
+    path: "/users",
+    roles: ["ADMIN"],
   },
 ];
 

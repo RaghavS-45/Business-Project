@@ -16,6 +16,7 @@ import customerRoutes from "./routes/customer.routes.js";
 import saleRoutes from "./routes/sale.routes.js";
 import auditRoutes from "./routes/audit.routes.js";
 import dlqRoutes from "./routes/dlq.routes.js";
+import userRoutes from "./routes/user.routes.js";
 
 /**
  * Express Application
@@ -121,6 +122,7 @@ app.use("/api/customers", customerRoutes);
 app.use("/api/sales", saleRoutes);
 app.use("/api/audit", auditRoutes);
 app.use("/api/admin/dlq", dlqRoutes);
+app.use("/api/users", userRoutes);
 
 // ─── 404 Handler ──────────────────────────────────────────
 app.use((_req, res) => {
@@ -132,6 +134,7 @@ app.use((_req, res) => {
 
 // ─── Global Error Handler (must be last) ──────────────────
 app.use(errorHandler);
+
 
 export default app;
 

@@ -19,6 +19,7 @@ const PosPage = lazy(() => import("@/pages/PosPage"));
 const SalesPage = lazy(() => import("@/pages/SalesPage"));
 const CustomersPage = lazy(() => import("@/pages/CustomersPage"));
 const VendorsPage = lazy(() => import("@/pages/VendorsPage"));
+const UsersPage = lazy(() => import("@/pages/UsersPage"));
 
 /** Route loading fallback */
 function PageLoader() {
@@ -82,6 +83,10 @@ export default function App() {
                   {/* Vendors — admin/manager only */}
                   <Route element={<ProtectedRoute roles={["ADMIN", "MANAGER"]} />}>
                     <Route path="/vendors" element={<VendorsPage />} />
+                  </Route>
+
+                  <Route element={<ProtectedRoute roles={["ADMIN"]} />}>
+                    <Route path="/users" element={<UsersPage />} />
                   </Route>
                 </Route>
               </Route>
