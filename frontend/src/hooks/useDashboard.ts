@@ -55,7 +55,10 @@ export function useProductStats() {
       const { data } = await api.get("/products", {
         params: { limit: 1 },
       });
-      return { total: data.data.total || data.data.totalDocs || 0 };
+
+      return {
+        total: data.data.pagination?.total || 0,
+      };
     },
     staleTime: 60 * 1000,
   });

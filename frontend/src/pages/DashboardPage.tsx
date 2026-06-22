@@ -21,22 +21,21 @@ import { IndianRupee, ShoppingCart, AlertTriangle, Package } from "lucide-react"
 
 export default function DashboardPage() {
   const { data: summary, isLoading: summaryLoading } = useDailySummary();
-  const { data: lowStock, isLoading: lowStockLoading } = useLowStockProducts();
-  const { data: recentSales, isLoading: salesLoading } = useRecentSales();
-  const { data: stats, isLoading: statsLoading } = useProductStats();
+const { data: lowStock, isLoading: lowStockLoading } = useLowStockProducts();
+const { data: recentSales, isLoading: salesLoading } = useRecentSales();
+const { data: stats, isLoading: statsLoading } = useProductStats();
+
 
   const formatCurrency = (v: number) =>
     `₹${(v || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 
   // Generate mock 7-day data from daily summary for chart
-  const chartData = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() - (6 - i));
-    return {
-      date: d.toLocaleDateString("en-US", { weekday: "short" }),
-      revenue: i === 6 ? (summary?.totalRevenue || 0) : Math.floor(Math.random() * 5000 + 1000),
-    };
-  });
+  const chartData = [
+  {
+    date: new Date().toLocaleDateString("en-US", { weekday: "short" }),
+    revenue: summary?.totalRevenue || 0,
+  },
+];
 
   return (
     <div className="space-y-6">
@@ -62,11 +61,15 @@ export default function DashboardPage() {
               subtitle={`${summary?.totalSales || 0} transactions`}
             />
             <KpiCard
-              title="Orders Today"
-              value={summary?.totalSales || 0}
-              icon={<ShoppingCart className="h-5 w-5" />}
-              subtitle={`Avg: ${formatCurrency(summary?.totalSales ? summary.totalRevenue / summary.totalSales : 0)}`}
-            />
+            title="Orders Today"
+            value={summary?.saleCount || 0}
+            icon={<ShoppingCart className="h-5 w-5" />}
+            subtitle={`Avg: ${formatCurrency(
+              summary?.saleCount
+                ? summary.totalRevenue / summary.saleCount
+                : 0
+            )}`}
+          />
             <KpiCard
               title="Low Stock Items"
               value={lowStock?.length || 0}
