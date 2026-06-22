@@ -62,11 +62,12 @@ export default function ProductsPage() {
     search: search || undefined,
     category: category === "All" ? undefined : category,
   });
+
   const deleteProduct = useDeleteProduct();
 
-  const products = data?.products || data?.docs || [];
-  const total = data?.total || data?.totalDocs || 0;
-  const totalPages = data?.totalPages || Math.ceil(total / 15) || 1;
+  const products = data?.products || [];
+  const total = data?.pagination?.total || 0;
+  const totalPages = data?.pagination?.totalPages || 1;
 
   const handleDelete = (id: string, name: string) => {
     if (confirm(`Delete "${name}"? This action cannot be undone.`)) {
