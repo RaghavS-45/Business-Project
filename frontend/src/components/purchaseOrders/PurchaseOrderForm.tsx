@@ -36,7 +36,7 @@ interface Props {
 export default function PurchaseOrderForm({ onSuccess }: Props) {
   const createPO = useCreatePurchaseOrder();
   const { data: vendorData } = useVendors({ limit: 100 });
-  const { data: productData } = useProducts({ limit: 100, isActive: true });
+  const { data: productData } = useProducts({ limit: 100});
 
   const vendors = vendorData?.vendors || vendorData?.docs || [];
   const products = productData?.products || [];
