@@ -64,7 +64,7 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
 
         <div className="hidden sm:block">
           <h2 className="text-sm font-medium text-foreground">
-            Welcome back, {user?.name?.split(" ")[0] || "User"}
+            Welcome back
           </h2>
           <p className="text-xs text-muted-foreground">
             {new Date().toLocaleDateString("en-US", {

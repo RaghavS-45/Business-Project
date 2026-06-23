@@ -35,7 +35,7 @@ export default function RevenueChart({ data, isLoading }: RevenueChartProps) {
   }
 
   return (
-    <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
+    <Card className="border-border/50 bg-card backdrop-blur-sm">
       <CardHeader className="pb-2">
         <CardTitle className="text-sm font-medium text-muted-foreground">
           Revenue Trend (Last 7 Days)

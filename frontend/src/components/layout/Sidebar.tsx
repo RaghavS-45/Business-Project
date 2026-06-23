@@ -10,6 +10,7 @@ import {
   ChevronLeft,
   ChevronRight,
   UserCog,
+  ClipboardList,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -57,6 +58,12 @@ const navItems = [
     label: "Vendors",
     icon: Truck,
     path: "/vendors",
+    roles: ["ADMIN", "MANAGER"],
+  },
+  {
+    label: "Purchase Orders",
+    icon: ClipboardList,
+    path: "/purchase-orders",
     roles: ["ADMIN", "MANAGER"],
   },
   {
