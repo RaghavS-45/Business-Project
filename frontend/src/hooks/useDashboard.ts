@@ -4,19 +4,23 @@ import api from "@/lib/axios";
 /**
  * Dashboard hooks — TanStack Query for KPIs, charts, low stock, recent sales.
  */
+export type DateRange = { from: Date; to: Date } | null;
 
-export function useDailySummary(date?: string) {
+export function useDailySummary(range?: DateRange) {
   return useQuery({
-    queryKey: ["sales", "summary", date],
+    queryKey: ["sales", "summary", range],
     queryFn: async () => {
-      const params = date ? { date } : {};
+      const params: Record<string, string> = {};
+      if (range) {
+        params.date = range.from.toISOString().split("T")[0];
+        params.endDate = range.to.toISOString().split("T")[0];
+      }
       const { data } = await api.get("/sales/summary/daily", { params });
       return data.data.summary;
     },
-    staleTime: 60 * 1000, // 1 minute
+    staleTime: 60 * 1000,
   });
 }
-
 export function useLowStockProducts() {
   return useQuery({
     queryKey: ["products", "low-stock"],

@@ -63,11 +63,11 @@ class SaleController {
    */
   async dailySummary(req, res, next) {
     try {
-      const summary = await saleService.getDailySummary(req.query.date);
-      res.status(200).json({
-        success: true,
-        data: { summary },
-      });
+      const summary = await saleService.getDailySummary(
+        req.query.date,
+        req.query.endDate
+      );
+      res.status(200).json({ success: true, data: { summary } });
     } catch (error) {
       next(error);
     }

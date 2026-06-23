@@ -412,24 +412,34 @@ class SaleService {
    * Returns: total revenue, sale count, items sold, average order value,
    * payment method breakdown, and top 5 products by quantity sold.
    */
-  async getDailySummary(dateStr) {
-    const date = dateStr ? new Date(dateStr) : new Date();
-    const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    const endOfDay = new Date(startOfDay);
-    endOfDay.setDate(endOfDay.getDate() + 1);
+  async getDailySummary(dateStr, endDateStr) {
+    let startOfDay, endOfDay;
 
-    const matchStage = {
-      $match: {
-        createdAt: { $gte: startOfDay, $lt: endOfDay },
-        status: "COMPLETED",
-      },
-    };
+    if (endDateStr) {
+      // Date range mode
+      const start = new Date(dateStr);
+      const end = new Date(endDateStr);
+      startOfDay = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+      endOfDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+      endOfDay.setDate(endOfDay.getDate() + 1);
+    } else {
+      // Single day mode (existing behavior)
+      const date = dateStr ? new Date(dateStr) : new Date();
+      startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      endOfDay = new Date(startOfDay);
+      endOfDay.setDate(endOfDay.getDate() + 1);
+    }
 
+    // Add daily breakdown for chart when range is selected
     const [summary] = await Sale.aggregate([
-      matchStage,
+      {
+        $match: {
+          createdAt: { $gte: startOfDay, $lt: endOfDay },
+          status: "COMPLETED",
+        },
+      },
       {
         $facet: {
-          // Overall totals
           totals: [
             {
               $group: {
@@ -458,18 +468,10 @@ class SaleService {
               },
             },
           ],
-          // Payment method breakdown
           byPaymentMethod: [
-            {
-              $group: {
-                _id: "$paymentMethod",
-                count: { $sum: 1 },
-                total: { $sum: "$grandTotal" },
-              },
-            },
+            { $group: { _id: "$paymentMethod", count: { $sum: 1 }, total: { $sum: "$grandTotal" } } },
             { $sort: { total: -1 } },
           ],
-          // Top 5 products by quantity
           topProducts: [
             { $unwind: "$items" },
             {
@@ -483,13 +485,25 @@ class SaleService {
             { $sort: { totalQuantity: -1 } },
             { $limit: 5 },
           ],
+          // NEW: daily breakdown for chart
+          dailyBreakdown: [
+            {
+              $group: {
+                _id: {
+                  $dateToString: { format: "%Y-%m-%d", date: "$createdAt" },
+                },
+                revenue: { $sum: "$grandTotal" },
+                orders: { $sum: 1 },
+              },
+            },
+            { $sort: { _id: 1 } },
+          ],
         },
       },
     ]);
-
     return {
       date: startOfDay.toISOString().slice(0, 10),
-      ...(summary.totals[0] || {
+      ...(summary?.totals?.[0] || {
         totalRevenue: 0,
         totalTax: 0,
         totalDiscount: 0,
@@ -497,8 +511,9 @@ class SaleService {
         itemsSold: 0,
         avgOrderValue: 0,
       }),
-      byPaymentMethod: summary.byPaymentMethod,
-      topProducts: summary.topProducts,
+      byPaymentMethod: summary?.byPaymentMethod || [],
+      topProducts: summary?.topProducts || [],
+      dailyBreakdown: summary?.dailyBreakdown || [],
     };
   }
 }

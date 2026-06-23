@@ -1,49 +1,148 @@
+import { useState } from "react";
 import {
   useDailySummary,
   useLowStockProducts,
   useRecentSales,
   useProductStats,
+  type DateRange,
 } from "@/hooks/useDashboard";
 import KpiCard from "@/components/dashboard/KpiCard";
 import RevenueChart from "@/components/dashboard/RevenueChart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCell,
+  TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { IndianRupee, ShoppingCart, AlertTriangle, Package } from "lucide-react";
+import {
+  IndianRupee, ShoppingCart, AlertTriangle,
+  Package, CalendarIcon, X,
+} from "lucide-react";
+import { format, subDays, startOfDay, endOfDay } from "date-fns";
+import { cn } from "@/lib/utils";
+
+const PRESETS = [
+  { label: "Today", range: () => ({ from: new Date(), to: new Date() }) },
+  { label: "Last 7 days", range: () => ({ from: subDays(new Date(), 6), to: new Date() }) },
+  { label: "Last 30 days", range: () => ({ from: subDays(new Date(), 29), to: new Date() }) },
+];
 
 export default function DashboardPage() {
-  const { data: summary, isLoading: summaryLoading } = useDailySummary();
-const { data: lowStock, isLoading: lowStockLoading } = useLowStockProducts();
-const { data: recentSales, isLoading: salesLoading } = useRecentSales();
-const { data: stats, isLoading: statsLoading } = useProductStats();
+  const [dateRange, setDateRange] = useState<DateRange>(null);
+  const [calOpen, setCalOpen] = useState(false);
+  const [selecting, setSelecting] = useState<"from" | "to">("from");
+  const [tempFrom, setTempFrom] = useState<Date | null>(null);
 
+  const { data: summary, isLoading: summaryLoading } = useDailySummary(dateRange);
+  const { data: lowStock, isLoading: lowStockLoading } = useLowStockProducts();
+  const { data: recentSales, isLoading: salesLoading } = useRecentSales();
+  const { data: stats, isLoading: statsLoading } = useProductStats();
 
   const formatCurrency = (v: number) =>
     `₹${(v || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 
-  // Generate mock 7-day data from daily summary for chart
-  const chartData = [
-  {
-    date: new Date().toLocaleDateString("en-US", { weekday: "short" }),
-    revenue: summary?.totalRevenue || 0,
-  },
-];
+  // Build chart data from dailyBreakdown or fall back to today
+  const chartData = summary?.dailyBreakdown?.length
+    ? summary.dailyBreakdown.map((d: { _id: string; revenue: number }) => ({
+      date: format(new Date(d._id), "dd MMM"),
+      revenue: d.revenue,
+    }))
+    : [{ date: format(new Date(), "dd MMM"), revenue: summary?.totalRevenue || 0 }];
+
+  const handleDayClick = (day: Date) => {
+    if (selecting === "from") {
+      setTempFrom(day);
+      setSelecting("to");
+    } else {
+      if (tempFrom && day >= tempFrom) {
+        setDateRange({ from: startOfDay(tempFrom), to: endOfDay(day) });
+      } else {
+        // clicked earlier than from — restart
+        setTempFrom(day);
+        setSelecting("to");
+        return;
+      }
+      setSelecting("from");
+      setTempFrom(null);
+      setCalOpen(false);
+    }
+  };
+
+  const rangeLabel = dateRange
+    ? `${format(dateRange.from, "dd MMM")} – ${format(dateRange.to, "dd MMM")}`
+    : "All time (today)";
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Overview of your store performance
-        </p>
+      {/* Header + Date Filter */}
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Overview of your store performance
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Presets */}
+          {PRESETS.map((p) => (
+            <Button
+              key={p.label}
+              variant="outline"
+              size="sm"
+              className="text-xs h-8"
+              onClick={() => setDateRange(p.range())}
+            >
+              {p.label}
+            </Button>
+          ))}
+
+          {/* Custom range picker */}
+          <Popover open={calOpen} onOpenChange={setCalOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className={cn(
+                  "text-xs h-8 gap-2",
+                  dateRange && "border-indigo-500/50 text-indigo-400"
+                )}
+              >
+                <CalendarIcon className="h-3.5 w-3.5" />
+                {rangeLabel}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-3" align="end">
+              <p className="text-xs text-muted-foreground mb-2">
+                {selecting === "from"
+                  ? "Select start date"
+                  : `From ${tempFrom ? format(tempFrom, "dd MMM") : "?"} — select end date`}
+              </p>
+              <Calendar
+                mode="single"
+                selected={tempFrom ?? dateRange?.from}
+                onSelect={(d) => d && handleDayClick(d)}
+                disabled={(d) => d > new Date()}
+              />
+            </PopoverContent>
+          </Popover>
+
+          {/* Clear */}
+          {dateRange && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground"
+              onClick={() => setDateRange(null)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* KPI Cards */}
@@ -55,21 +154,17 @@ const { data: stats, isLoading: statsLoading } = useProductStats();
         ) : (
           <>
             <KpiCard
-              title="Today's Revenue"
+              title={dateRange ? "Period Revenue" : "Today's Revenue"}
               value={formatCurrency(summary?.totalRevenue || 0)}
               icon={<IndianRupee className="h-5 w-5" />}
-              subtitle={`${summary?.totalSales || 0} transactions`}
+              subtitle={`${summary?.saleCount || 0} transactions`}
             />
             <KpiCard
-            title="Orders Today"
-            value={summary?.saleCount || 0}
-            icon={<ShoppingCart className="h-5 w-5" />}
-            subtitle={`Avg: ${formatCurrency(
-              summary?.saleCount
-                ? summary.totalRevenue / summary.saleCount
-                : 0
-            )}`}
-          />
+              title={dateRange ? "Orders in Period" : "Orders Today"}
+              value={summary?.saleCount || 0}
+              icon={<ShoppingCart className="h-5 w-5" />}
+              subtitle={`Avg: ${formatCurrency(summary?.avgOrderValue || 0)}`}
+            />
             <KpiCard
               title="Low Stock Items"
               value={lowStock?.length || 0}
@@ -93,10 +188,8 @@ const { data: stats, isLoading: statsLoading } = useProductStats();
 
       {/* Charts + Tables */}
       <div className="grid gap-6 lg:grid-cols-2">
-        {/* Revenue Chart */}
         <RevenueChart data={chartData} isLoading={summaryLoading} />
 
-        {/* Recent Sales */}
         <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -123,51 +216,32 @@ const { data: stats, isLoading: statsLoading } = useProductStats();
                 <TableBody>
                   {(recentSales?.sales || recentSales?.docs || [])
                     .slice(0, 5)
-                    .map(
-                      (sale: {
-                        _id: string;
-                        invoiceNumber: string;
-                        grandTotal: number;
-                        paymentMethod: string;
-                        status: string;
-                      }) => (
-                        <TableRow key={sale._id} className="border-border/30">
-                          <TableCell className="text-xs font-mono">
-                            {sale.invoiceNumber}
-                          </TableCell>
-                          <TableCell className="text-xs font-medium">
-                            {formatCurrency(sale.grandTotal)}
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant="outline"
-                              className="text-[10px] font-medium"
-                            >
-                              {sale.paymentMethod}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant={
-                                sale.status === "COMPLETED"
-                                  ? "default"
-                                  : "destructive"
-                              }
-                              className="text-[10px]"
-                            >
-                              {sale.status}
-                            </Badge>
-                          </TableCell>
-                        </TableRow>
-                      )
-                    )}
+                    .map((sale: {
+                      _id: string; invoiceNumber: string;
+                      grandTotal: number; paymentMethod: string; status: string;
+                    }) => (
+                      <TableRow key={sale._id} className="border-border/30">
+                        <TableCell className="text-xs font-mono">{sale.invoiceNumber}</TableCell>
+                        <TableCell className="text-xs font-medium">{formatCurrency(sale.grandTotal)}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-[10px] font-medium">
+                            {sale.paymentMethod}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={sale.status === "COMPLETED" ? "default" : "destructive"}
+                            className="text-[10px]"
+                          >
+                            {sale.status}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
                   {(!recentSales?.sales?.length && !recentSales?.docs?.length) && (
                     <TableRow>
-                      <TableCell
-                        colSpan={4}
-                        className="text-center text-muted-foreground text-sm py-8"
-                      >
-                        No sales today yet
+                      <TableCell colSpan={4} className="text-center text-muted-foreground text-sm py-8">
+                        No sales yet
                       </TableCell>
                     </TableRow>
                   )}
@@ -198,35 +272,23 @@ const { data: stats, isLoading: statsLoading } = useProductStats();
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {lowStock?.slice(0, 10).map(
-                  (product: {
-                    _id: string;
-                    name: string;
-                    sku: string;
-                    stock: number;
-                    lowStockThreshold: number;
-                  }) => (
-                    <TableRow key={product._id} className="border-border/30">
-                      <TableCell className="text-sm font-medium">
-                        {product.name}
-                      </TableCell>
-                      <TableCell className="text-xs font-mono text-muted-foreground">
-                        {product.sku}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant="destructive"
-                          className="text-[10px] font-mono"
-                        >
-                          {product.stock}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">
-                        {product.lowStockThreshold}
-                      </TableCell>
-                    </TableRow>
-                  )
-                )}
+                {lowStock?.slice(0, 10).map((product: {
+                  _id: string; name: string; sku: string;
+                  stock: number; lowStockThreshold: number;
+                }) => (
+                  <TableRow key={product._id} className="border-border/30">
+                    <TableCell className="text-sm font-medium">{product.name}</TableCell>
+                    <TableCell className="text-xs font-mono text-muted-foreground">{product.sku}</TableCell>
+                    <TableCell>
+                      <Badge variant="destructive" className="text-[10px] font-mono">
+                        {product.stock}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {product.lowStockThreshold}
+                    </TableCell>
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           </CardContent>

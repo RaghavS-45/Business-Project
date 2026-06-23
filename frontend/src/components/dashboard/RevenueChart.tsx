@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import {
   Area,
   AreaChart,
@@ -9,12 +10,43 @@ import {
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
+function useCssVar(variable: string) {
+  const [value, setValue] = useState("");
+
+  useEffect(() => {
+    const update = () => {
+      setValue(
+        getComputedStyle(document.documentElement)
+          .getPropertyValue(variable)
+          .trim()
+      );
+    };
+    update();
+
+    const observer = new MutationObserver(update);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+    return () => observer.disconnect();
+  }, [variable]);
+
+  return value;
+}
+
+// ── Component ──────────────────────────────────────────────
 interface RevenueChartProps {
   data: Array<{ date: string; revenue: number }>;
   isLoading?: boolean;
 }
 
 export default function RevenueChart({ data, isLoading }: RevenueChartProps) {
+
+  const mutedFg = useCssVar("--muted-foreground");
+  const border = useCssVar("--border");
+  const popover = useCssVar("--popover");
+  const foreground = useCssVar("--foreground");
+
   if (isLoading) {
     return (
       <Card className="border-border/50 bg-card/50">
@@ -60,28 +92,29 @@ export default function RevenueChart({ data, isLoading }: RevenueChartProps) {
             />
             <XAxis
               dataKey="date"
-              tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+              tick={{ fontSize: 11, fill: mutedFg || "#888888" }}
               tickLine={false}
               axisLine={false}
             />
             <YAxis
-              tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+              tick={{ fontSize: 11, fill: mutedFg || "#888888" }}
               tickLine={false}
               axisLine={false}
               tickFormatter={(v) => `₹${v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v}`}
             />
+            <CartesianGrid
+              strokeDasharray="3 3"
+              stroke={border || "#333"}
+              strokeOpacity={0.3}
+            />
             <Tooltip
               contentStyle={{
-                backgroundColor: "hsl(var(--popover))",
-                border: "1px solid hsl(var(--border))",
+                backgroundColor: popover || "#1a1a1a",
+                border: `1px solid ${border || "#333"}`,
                 borderRadius: "8px",
-                color: "hsl(var(--foreground))",
+                color: foreground || "#fff",
                 fontSize: "12px",
               }}
-              formatter={(value: any) => [
-                `₹${Number(value || 0).toLocaleString("en-IN")}`,
-                "Revenue",
-              ]}
             />
             <Area
               type="monotone"
