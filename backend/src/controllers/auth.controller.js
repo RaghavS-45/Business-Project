@@ -12,7 +12,8 @@ class AuthController {
    */
   async register(req, res, next) {
     try {
-      const { user, accessToken, refreshToken } = await authService.register(
+      // destructuring 
+      const { user, accessToken, refreshToken } = await authService.register( 
         req.body
       );
 
