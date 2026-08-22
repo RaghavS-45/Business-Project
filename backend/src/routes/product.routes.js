@@ -52,6 +52,7 @@ router.post(
   productController.create
 );
 
+// this works for all searches in products page using query parameters
 router.get(
   "/",
   validate(productQuerySchema, "query"),
