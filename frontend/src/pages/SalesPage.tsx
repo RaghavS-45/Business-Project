@@ -52,8 +52,15 @@ export default function SalesPage() {
   const refundMutation = useRefund();
 
   const sales = data?.sales || data?.docs || [];
-  const total = data?.total || data?.totalDocs || 0;
-  const totalPages = data?.totalPages || Math.ceil(total / 15) || 1;
+
+  // Pagination metadata lives under data.pagination in the API response.
+  // Fall back to legacy top-level fields / derived values just in case
+  // an older endpoint shape is ever hit.
+  const pagination = data?.pagination;
+  const total = pagination?.total ?? data?.total ?? data?.totalDocs ?? 0;
+  const totalPages = pagination?.totalPages ?? Math.ceil(total / 15) ?? 1;
+  const hasPrev = pagination?.hasPrev ?? page > 1;
+  const hasNext = pagination?.hasNext ?? page < totalPages;
 
   const formatCurrency = (v: number) =>
     `₹${(v || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
@@ -89,6 +96,13 @@ export default function SalesPage() {
         onError: () => toast.error("Failed to process refund"),
       }
     );
+  };
+
+  const goPrev = () => {
+    if (hasPrev) setPage((p) => Math.max(1, p - 1));
+  };
+  const goNext = () => {
+    if (hasNext) setPage((p) => p + 1);
   };
 
   return (
@@ -215,14 +229,26 @@ export default function SalesPage() {
       {totalPages > 1 && (
         <div className="flex items-center justify-between">
           <p className="text-xs text-muted-foreground">
-            Page {page} of {totalPages}
+            Page {page} of {totalPages} · {total} total
           </p>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
-              <ChevronLeft className="h-4 w-4" />
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!hasPrev}
+              onClick={goPrev}
+            >
+              <ChevronLeft className="h-4 w-4 mr-1" />
+              Prev
             </Button>
-            <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
-              <ChevronRight className="h-4 w-4" />
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!hasNext}
+              onClick={goNext}
+            >
+              Next
+              <ChevronRight className="h-4 w-4 ml-1" />
             </Button>
           </div>
         </div>

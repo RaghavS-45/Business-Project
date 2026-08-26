@@ -11,6 +11,7 @@ export interface ProductFilters {
   search?: string;
   category?: string;
   sortBy?: string;
+  isActive?: boolean;
   sortOrder?: "asc" | "desc";
 }
 

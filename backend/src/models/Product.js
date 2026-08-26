@@ -57,7 +57,7 @@ const productSchema = new mongoose.Schema(
       maxlength: [200, "Name must be at most 200 characters"],
     },
 
-    sku: {
+    sku: {  //uniquely identifies a pdt even when names are same but they come from diff manufacturers
       type: String,
       unique: true,
       uppercase: true,
@@ -67,8 +67,8 @@ const productSchema = new mongoose.Schema(
 
     barcode: {
       type: String,
-      unique: true,
-      sparse: true, // unique index only applies to non-null values
+      unique: true, // 2 barcodes cant be same
+      sparse: true, // 2 or more barcods can have null value
       trim: true,
     },
 
@@ -164,13 +164,13 @@ const productSchema = new mongoose.Schema(
 productSchema.index({ category: 1 });
 productSchema.index({ isActive: 1 });
 productSchema.index({ stock: 1 }); // For low-stock queries: stock <= threshold
-productSchema.index({ name: "text", description: "text" }); // Full-text search
+productSchema.index({ name: "text", description: "text" }); // Full-text search instead of matching
 
 // ─── Pre-validate: Auto-generate SKU ─────────────────────
-productSchema.pre("validate", async function (next) {
+productSchema.pre("validate", async function (next) { //since it is set to be unique it must be validated first before saving(pre("save"))
   if (!this.sku) {
-    const random = Math.random().toString(36).substring(2, 8).toUpperCase();
-    this.sku = `PRD-${random}`;
+    const random = Math.random().toString(36).substring(2, 8).toUpperCase(); //random 6 character alphanumeric string, base 36(0-9, a-z)
+    this.sku = `PRD-${random}`; //adds PRD before the random substring
   }
   next();
 });
