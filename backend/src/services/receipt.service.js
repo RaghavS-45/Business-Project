@@ -279,9 +279,8 @@ class ReceiptService {
       const stream = cloudinary.uploader.upload_stream(
         {
           folder: "inventory-pos/receipts",
-          resource_type: "raw",
-          public_id: invoiceNumber,
-          format: "pdf",
+          resource_type: "auto", // auto-detects PDF, serves with correct Content-Type
+          public_id: `${invoiceNumber}.pdf`,
           overwrite: true,
         },
         (error, result) => {

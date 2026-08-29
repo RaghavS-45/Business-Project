@@ -336,14 +336,24 @@ export default function SalesPage() {
               </div>
 
               {saleDetail.receiptUrl && (
-                <a
-                  href={saleDetail.receiptUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block text-center text-sm text-indigo-400 hover:underline"
-                >
-                  View Receipt PDF →
-                </a>
+                <div className="flex gap-2 justify-center mt-2">
+                  <a
+                    href={`https://docs.google.com/viewer?url=${encodeURIComponent(saleDetail.receiptUrl)}&embedded=false`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm text-indigo-400 hover:underline"
+                  >
+                    View Receipt PDF →
+                  </a>
+                  <span className="text-gray-600">|</span>
+                  <a
+                    href={saleDetail.receiptUrl}
+                    download
+                    className="text-sm text-indigo-400 hover:underline"
+                  >
+                    Download
+                  </a>
+                </div>
               )}
             </div>
           ) : null}
