@@ -280,7 +280,7 @@ class ReceiptService {
         {
           folder: "inventory-pos/receipts",
           resource_type: "auto", // auto-detects PDF, serves with correct Content-Type
-          public_id: invoiceNumber,
+          public_id: `${invoiceNumber}.pdf`,
           overwrite: true,
         },
         (error, result) => {

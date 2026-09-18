@@ -338,7 +338,7 @@ export default function SalesPage() {
               {saleDetail.receiptUrl && (
                 <div className="flex gap-2 justify-center mt-2">
                   <a
-                    href={saleDetail.receiptUrl}
+                    href={`https://docs.google.com/viewer?url=${encodeURIComponent(saleDetail.receiptUrl)}&embedded=false`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-sm text-indigo-400 hover:underline"
