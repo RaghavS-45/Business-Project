@@ -36,6 +36,7 @@ export function useSale(id: string | undefined) {
       return data.data.sale;
     },
     enabled: !!id,
+    staleTime: 0, // always re-fetch — receiptUrl is populated async by the worker
   });
 }
 
