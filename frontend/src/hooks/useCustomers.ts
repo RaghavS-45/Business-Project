@@ -12,7 +12,12 @@ export function useCustomers(filters: CustomerFilters = {}) {
     queryKey: ["customers", filters],
     queryFn: async () => {
       const { data } = await api.get("/customers", { params: filters });
-      return data.data;
+      const payload = data.data;
+      return {
+        customers: payload.customers ?? [],
+        total: payload.pagination?.total ?? 0,
+        pagination: payload.pagination,
+      };
     },
   });
 }

@@ -35,9 +35,9 @@ export default function VendorsPage() {
   const updateVendor = useUpdateVendor();
   const deleteVendor = useDeleteVendor();
 
-  const vendors = data?.vendors || data?.docs || [];
-  const total = data?.total || data?.totalDocs || 0;
-  const totalPages = data?.totalPages || Math.ceil(total / 15) || 1;
+  const vendors = data?.vendors || [];
+const total = data?.total || 0;
+const totalPages = data?.totalPages || Math.ceil(total / 15) || 1;
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<VendorFormData>();
 

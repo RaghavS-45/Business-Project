@@ -12,7 +12,12 @@ export function useVendors(filters: VendorFilters = {}) {
     queryKey: ["vendors", filters],
     queryFn: async () => {
       const { data } = await api.get("/vendors", { params: filters });
-      return data.data;
+      const payload = data.data;
+      return {
+        vendors: payload.vendors ?? [],
+        total: payload.pagination?.total ?? 0,
+        totalPages: payload.pagination?.totalPages ?? 1,
+      };
     },
   });
 }
