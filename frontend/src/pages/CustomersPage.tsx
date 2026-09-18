@@ -36,9 +36,9 @@ export default function CustomersPage() {
   const updateCustomer = useUpdateCustomer();
   const deleteCustomer = useDeleteCustomer();
 
-  const customers = data?.customers || data?.docs || [];
-  const total = data?.total || data?.totalDocs || 0;
-  const totalPages = data?.totalPages || Math.ceil(total / 15) || 1;
+  const customers = data?.customers ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = data?.pagination?.totalPages ?? (Math.ceil(total / 15) || 1);
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<CustomerFormData>();
 

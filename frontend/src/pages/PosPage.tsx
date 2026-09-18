@@ -108,7 +108,7 @@ export default function PosPage() {
   const checkoutMutation = useCheckout();
 
   const products = productsData?.products || productsData?.docs || [];
-  const customers = customersData?.customers || customersData?.docs || [];
+  const customers = customersData?.customers ?? [];
 
   // Keyboard shortcuts
   

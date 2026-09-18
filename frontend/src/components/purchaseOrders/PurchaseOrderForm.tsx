@@ -38,7 +38,7 @@ export default function PurchaseOrderForm({ onSuccess }: Props) {
   const { data: vendorData } = useVendors({ limit: 100 });
   const { data: productData } = useProducts({ limit: 100});
 
-  const vendors = vendorData?.vendors || vendorData?.docs || [];
+  const vendors = vendorData?.vendors ?? [];
   const products = productData?.products || [];
 
   const {
