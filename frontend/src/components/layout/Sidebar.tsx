@@ -92,7 +92,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       {/* Logo */}
       <div className="flex h-16 items-center border-b border-border/50 px-4">
         <div className="flex items-center gap-3 overflow-hidden">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 shadow-md shadow-indigo-500/20">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 shadow-md shadow-blue-500/20">
             <Package className="h-5 w-5 text-white" />
           </div>
           {!collapsed && (
@@ -128,12 +128,12 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
               )}
             >
               {isActive && (
-                <div className="absolute left-0 top-1/2 -translate-y-1/2 h-6 w-[3px] rounded-r-full bg-gradient-to-b from-indigo-500 to-violet-600" />
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 h-6 w-[3px] rounded-r-full bg-gradient-to-b from-blue-500 to-blue-600" />
               )}
               <item.icon
                 className={cn(
                   "h-5 w-5 shrink-0 transition-colors",
-                  isActive ? "text-indigo-400" : "text-muted-foreground group-hover:text-foreground"
+                  isActive ? "text-blue-400" : "text-muted-foreground group-hover:text-foreground"
                 )}
               />
               {!collapsed && (
@@ -142,7 +142,7 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
               {!collapsed && item.highlight && (
                 <Badge
                   variant="secondary"
-                  className="ml-auto text-[10px] px-1.5 py-0 bg-indigo-500/10 text-indigo-400 border-indigo-500/20"
+                  className="ml-auto text-[10px] px-1.5 py-0 bg-blue-500/10 text-blue-400 border-blue-500/20"
                 >
                   POS
                 </Badge>

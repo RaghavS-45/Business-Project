@@ -199,7 +199,7 @@ export default function PurchaseOrderDetail({ poId, onStatusChange }: Props) {
           <>
             <Button
               size="sm"
-              className="bg-gradient-to-r from-indigo-500 to-violet-600 text-white"
+              className="bg-gradient-to-r from-blue-500 to-blue-600 text-white"
               onClick={() => onStatusChange(po._id, "approved", po.poNumber)}
             >
               <CheckCircle className="mr-2 h-4 w-4" />

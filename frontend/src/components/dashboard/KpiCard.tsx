@@ -22,12 +22,12 @@ export default function KpiCard({
   return (
     <Card
       className={cn(
-        "group relative overflow-hidden border-border/50 bg-card/50 backdrop-blur-sm transition-all duration-300 hover:shadow-lg hover:shadow-indigo-500/5 hover:border-indigo-500/20",
+        "group relative overflow-hidden border-border/50 bg-card/50 backdrop-blur-sm transition-all duration-300 hover:shadow-lg hover:shadow-blue-500/5 hover:border-blue-500/20",
         className
       )}
     >
       {/* Subtle gradient accent on hover */}
-      <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-violet-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+      <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-blue-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
 
       <CardContent className="relative p-5">
         <div className="flex items-start justify-between">
@@ -57,7 +57,7 @@ export default function KpiCard({
               </div>
             )}
           </div>
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500/10 to-violet-500/10 text-indigo-400 transition-colors group-hover:from-indigo-500/20 group-hover:to-violet-500/20">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-500/10 to-blue-500/10 text-blue-400 transition-colors group-hover:from-blue-500/20 group-hover:to-blue-500/20">
             {icon}
           </div>
         </div>

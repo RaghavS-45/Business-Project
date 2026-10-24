@@ -81,7 +81,7 @@ const totalPages = data?.totalPages || Math.ceil(total / 15) || 1;
           <h1 className="text-2xl font-bold tracking-tight">Vendors</h1>
           <p className="text-sm text-muted-foreground mt-1">{total} vendors</p>
         </div>
-        <Button onClick={openCreate} className="bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white shadow-md shadow-indigo-500/20">
+        <Button onClick={openCreate} className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-md shadow-blue-500/20">
           <Plus className="mr-2 h-4 w-4" />Add Vendor
         </Button>
       </div>
@@ -163,7 +163,7 @@ const totalPages = data?.totalPages || Math.ceil(total / 15) || 1;
               </div>
             </div>
             <div className="flex justify-end">
-              <Button type="submit" disabled={isPending} className="bg-gradient-to-r from-indigo-500 to-violet-600 text-white">
+              <Button type="submit" disabled={isPending} className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
                 {isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : editing ? "Update" : "Create"}
               </Button>
             </div>

@@ -331,7 +331,7 @@ export default function SalesPage() {
                 </div>
                 <div className="flex justify-between text-lg font-bold pt-2">
                   <span>Grand Total</span>
-                  <span className="text-indigo-400">{formatCurrency(saleDetail.grandTotal)}</span>
+                  <span className="text-blue-400">{formatCurrency(saleDetail.grandTotal)}</span>
                 </div>
               </div>
 
@@ -341,7 +341,7 @@ export default function SalesPage() {
                     href={saleDetail.receiptUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-sm text-indigo-400 hover:underline"
+                    className="text-sm text-blue-400 hover:underline"
                   >
                     View Receipt PDF →
                   </a>
@@ -349,7 +349,7 @@ export default function SalesPage() {
                   <a
                     href={saleDetail.receiptUrl}
                     download
-                    className="text-sm text-indigo-400 hover:underline"
+                    className="text-sm text-blue-400 hover:underline"
                   >
                     Download
                   </a>

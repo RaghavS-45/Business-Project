@@ -109,7 +109,7 @@ export default function DashboardPage() {
                 size="sm"
                 className={cn(
                   "text-xs h-8 gap-2",
-                  dateRange && "border-indigo-500/50 text-indigo-400"
+                  dateRange && "border-blue-500/50 text-blue-400"
                 )}
               >
                 <CalendarIcon className="h-3.5 w-3.5" />

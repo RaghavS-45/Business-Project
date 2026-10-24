@@ -206,7 +206,7 @@ export default function PosPage() {
               size="sm"
               className={`shrink-0 text-xs ${
                 selectedCategory === cat
-                  ? "bg-indigo-500 hover:bg-indigo-600 text-white"
+                  ? "bg-blue-500 hover:bg-blue-600 text-white"
                   : ""
               }`}
               onClick={() => setSelectedCategory(cat)}
@@ -256,12 +256,12 @@ export default function PosPage() {
                         product.stock <= 0
                           ? "border-border/30 opacity-50 cursor-not-allowed"
                           : inCart
-                          ? "border-indigo-500/50 bg-indigo-500/5 shadow-sm shadow-indigo-500/10"
-                          : "border-border/50 bg-card/30 hover:border-indigo-500/30 hover:bg-card/50 hover:shadow-sm"
+                          ? "border-blue-500/50 bg-blue-500/5 shadow-sm shadow-blue-500/10"
+                          : "border-border/50 bg-card/30 hover:border-blue-500/30 hover:bg-card/50 hover:shadow-sm"
                       }`}
                     >
                       {inCart && (
-                        <Badge className="absolute -top-2 -right-2 h-5 w-5 p-0 flex items-center justify-center bg-indigo-500 text-white text-[10px] rounded-full shadow-md">
+                        <Badge className="absolute -top-2 -right-2 h-5 w-5 p-0 flex items-center justify-center bg-blue-500 text-white text-[10px] rounded-full shadow-md">
                           {inCart.quantity}
                         </Badge>
                       )}
@@ -302,7 +302,7 @@ export default function PosPage() {
         <CardHeader className="pb-3 space-y-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
-              <ShoppingCart className="h-4 w-4 text-indigo-400" />
+              <ShoppingCart className="h-4 w-4 text-blue-400" />
               Cart ({cartItems.length})
             </CardTitle>
             {cartItems.length > 0 && (
@@ -344,7 +344,7 @@ export default function PosPage() {
                     >
                       <span>Walk-in Customer</span>
                       {!selectedCustomer && (
-                        <Check className="ml-auto h-4 w-4 text-indigo-400" />
+                        <Check className="ml-auto h-4 w-4 text-blue-400" />
                       )}
                     </CommandItem>
                     {customers.map(
@@ -363,7 +363,7 @@ export default function PosPage() {
                             </span>
                           )}
                           {selectedCustomer === c._id && (
-                            <Check className="ml-auto h-4 w-4 text-indigo-400" />
+                            <Check className="ml-auto h-4 w-4 text-blue-400" />
                           )}
                         </CommandItem>
                       )
@@ -487,7 +487,7 @@ export default function PosPage() {
               <Separator className="my-2" />
               <div className="flex justify-between text-lg font-bold">
                 <span>Total</span>
-                <span className="text-indigo-400">
+                <span className="text-blue-400">
                   ₹{grandTotal.toFixed(2)}
                 </span>
               </div>
@@ -520,7 +520,7 @@ export default function PosPage() {
 
             <Button
               onClick={() => setCheckoutOpen(true)}
-              className="w-full bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white shadow-lg shadow-indigo-500/25 h-12 text-base font-semibold"
+              className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-lg shadow-blue-500/25 h-12 text-base font-semibold"
             >
               <ShoppingCart className="mr-2 h-5 w-5" />
               Checkout — ₹{grandTotal.toFixed(2)}
@@ -579,7 +579,7 @@ export default function PosPage() {
               </div>
               <div className="flex justify-between text-lg font-bold pt-2">
                 <span>Grand Total</span>
-                <span className="text-indigo-400">
+                <span className="text-blue-400">
                   ₹{grandTotal.toFixed(2)}
                 </span>
               </div>
@@ -604,7 +604,7 @@ export default function PosPage() {
             <Button
               onClick={handleCheckout}
               disabled={checkoutMutation.isPending}
-              className="bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white"
+              className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white"
             >
               {checkoutMutation.isPending ? (
                 <>

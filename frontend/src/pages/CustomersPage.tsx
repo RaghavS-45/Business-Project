@@ -82,7 +82,7 @@ export default function CustomersPage() {
           <h1 className="text-2xl font-bold tracking-tight">Customers</h1>
           <p className="text-sm text-muted-foreground mt-1">{total} customers</p>
         </div>
-        <Button onClick={openCreate} className="bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white shadow-md shadow-indigo-500/20">
+        <Button onClick={openCreate} className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-md shadow-blue-500/20">
           <Plus className="mr-2 h-4 w-4" />Add Customer
         </Button>
       </div>
@@ -114,7 +114,7 @@ export default function CustomersPage() {
                   <TableCell className="text-xs text-muted-foreground">{c.email || "—"}</TableCell>
                   <TableCell className="text-xs text-muted-foreground">{c.phone || "—"}</TableCell>
                   <TableCell className="text-right">
-                    <Badge variant="outline" className="text-[10px] text-indigo-400 border-indigo-500/20">{c.loyaltyPoints} pts</Badge>
+                    <Badge variant="outline" className="text-[10px] text-blue-400 border-blue-500/20">{c.loyaltyPoints} pts</Badge>
                   </TableCell>
                   <TableCell className="text-right text-sm font-medium">₹{(c.totalPurchases || 0).toLocaleString("en-IN")}</TableCell>
                   <TableCell>
@@ -168,7 +168,7 @@ export default function CustomersPage() {
               <Input id="c-notes" {...register("notes")} placeholder="Optional" />
             </div>
             <div className="flex justify-end">
-              <Button type="submit" disabled={isPending} className="bg-gradient-to-r from-indigo-500 to-violet-600 text-white">
+              <Button type="submit" disabled={isPending} className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
                 {isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : editing ? "Update" : "Create"}
               </Button>
             </div>

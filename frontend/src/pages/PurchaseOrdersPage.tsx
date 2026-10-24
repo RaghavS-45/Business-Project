@@ -146,7 +146,7 @@ export default function PurchaseOrdersPage() {
         </div>
         <Button
           onClick={() => setCreateDialogOpen(true)}
-          className="bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white shadow-md shadow-indigo-500/20"
+          className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-md shadow-blue-500/20"
         >
           <Plus className="mr-2 h-4 w-4" />
           New Purchase Order

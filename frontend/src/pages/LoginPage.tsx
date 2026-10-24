@@ -44,15 +44,15 @@ export default function LoginPage() {
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background">
       {/* Animated gradient background */}
       <div className="absolute inset-0 -z-10">
-        <div className="absolute inset-0 bg-gradient-to-br from-indigo-950/50 via-background to-violet-950/30" />
-        <div className="absolute top-1/4 -left-20 h-72 w-72 rounded-full bg-indigo-500/10 blur-3xl animate-pulse" />
-        <div className="absolute bottom-1/4 -right-20 h-96 w-96 rounded-full bg-violet-500/10 blur-3xl animate-pulse [animation-delay:1s]" />
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-950/50 via-background to-blue-950/30" />
+        <div className="absolute top-1/4 -left-20 h-72 w-72 rounded-full bg-blue-500/10 blur-3xl animate-pulse" />
+        <div className="absolute bottom-1/4 -right-20 h-96 w-96 rounded-full bg-blue-500/10 blur-3xl animate-pulse [animation-delay:1s]" />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-64 w-64 rounded-full bg-blue-500/5 blur-3xl animate-pulse [animation-delay:2s]" />
       </div>
 
-      <Card className="w-full max-w-md mx-4 border-border/50 bg-card/80 backdrop-blur-xl shadow-2xl shadow-indigo-500/5">
+      <Card className="w-full max-w-md mx-4 border-border/50 bg-card/80 backdrop-blur-xl shadow-2xl shadow-blue-500/5">
         <CardHeader className="text-center space-y-4 pb-2">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 shadow-lg shadow-indigo-500/25">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg shadow-blue-500/25">
             <Package className="h-8 w-8 text-white" />
           </div>
           <div>
@@ -123,7 +123,7 @@ export default function LoginPage() {
 
             <Button
               type="submit"
-              className="w-full bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white shadow-lg shadow-indigo-500/25 transition-all duration-200"
+              className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-lg shadow-blue-500/25 transition-all duration-200"
               disabled={loginMutation.isPending}
               size="lg"
             >

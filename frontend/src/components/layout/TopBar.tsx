@@ -96,7 +96,7 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
               className="flex items-center gap-2 pl-2 pr-3 hover:bg-accent/50"
             >
               <Avatar className="h-8 w-8">
-                <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-violet-600 text-white text-xs font-bold">
+                <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600 text-white text-xs font-bold">
                   {initials}
                 </AvatarFallback>
               </Avatar>

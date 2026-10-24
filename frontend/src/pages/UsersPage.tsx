@@ -25,8 +25,8 @@ const ROLES = ["ADMIN", "MANAGER", "CASHIER"] as const;
 type Role = typeof ROLES[number];
 
 const roleBadgeClass: Record<Role, string> = {
-    ADMIN: "bg-violet-500/10 text-violet-400 border-violet-500/20",
-    MANAGER: "bg-indigo-500/10 text-indigo-400 border-indigo-500/20",
+    ADMIN: "bg-blue-500/10 text-blue-400 border-blue-500/20",
+    MANAGER: "bg-blue-500/10 text-blue-400 border-blue-500/20",
     CASHIER: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
 };
 
@@ -189,7 +189,7 @@ export default function UsersPage() {
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
-                            <ShieldCheck className="h-5 w-5 text-indigo-400" />
+                            <ShieldCheck className="h-5 w-5 text-blue-400" />
                             Add Team Member
                         </DialogTitle>
                     </DialogHeader>
