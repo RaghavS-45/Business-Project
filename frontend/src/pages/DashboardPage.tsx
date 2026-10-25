@@ -25,6 +25,8 @@ import {
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { cn } from "@/lib/utils";
 
+import AiInsightsCard from "@/components/dashboard/AiInsightsCard";
+
 const PRESETS = [
   { label: "Today", range: () => ({ from: new Date(), to: new Date() }) },
   { label: "Last 7 days", range: () => ({ from: subDays(new Date(), 6), to: new Date() }) },
@@ -185,6 +187,8 @@ export default function DashboardPage() {
           </>
         )}
       </div>
+
+       <AiInsightsCard range={dateRange} />
 
       {/* Charts + Tables */}
       <div className="grid gap-6 lg:grid-cols-2">

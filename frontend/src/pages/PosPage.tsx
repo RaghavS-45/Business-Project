@@ -217,7 +217,7 @@ export default function PosPage() {
         </div>
 
         {/* Product grid */}
-        <ScrollArea className="flex-1">
+        <ScrollArea className="flex-1 min-h-0">
           {productsLoading ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
               {Array.from({ length: 12 }).map((_, i) => (
@@ -298,8 +298,8 @@ export default function PosPage() {
       </div>
 
       {/* ─── RIGHT: Cart Panel ────────────────────────────── */}
-      <Card className="lg:w-[380px] shrink-0 border-border/50 bg-card/50 backdrop-blur-sm flex flex-col">
-        <CardHeader className="pb-3 space-y-3">
+        <Card className="lg:w-[380px] shrink-0 min-h-0 overflow-hidden border-border/50 bg-card/50 backdrop-blur-sm flex flex-col">
+  <CardHeader className="shrink-0 pb-3 space-y-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
               <ShoppingCart className="h-4 w-4 text-blue-400" />
@@ -376,7 +376,7 @@ export default function PosPage() {
         </CardHeader>
 
         {/* Cart items */}
-        <ScrollArea className="flex-1 px-4">
+        <ScrollArea className="flex-1 min-h-0 px-4">
           {cartItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
               <ShoppingCart className="h-10 w-10 mb-3 opacity-30" />
@@ -466,7 +466,7 @@ export default function PosPage() {
 
         {/* Totals + Checkout */}
         {cartItems.length > 0 && (
-          <div className="border-t border-border/50 p-4 space-y-3">
+          <div className="shrink-0 border-t border-border/50 p-4 space-y-3">
             <div className="space-y-1.5 text-sm">
               <div className="flex justify-between text-muted-foreground">
                 <span>Subtotal</span>

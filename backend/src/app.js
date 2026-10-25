@@ -18,6 +18,7 @@ import auditRoutes from "./routes/audit.routes.js";
 import dlqRoutes from "./routes/dlq.routes.js";
 import userRoutes from "./routes/user.routes.js";
 import purchaseOrderRoutes from "./routes/purchaseOrder.routes.js";
+import aiRoutes from "./routes/ai.routes.js";
 
 /**
  * Express Application
@@ -131,6 +132,7 @@ app.use("/api/audit", auditRoutes);
 app.use("/api/admin/dlq", dlqRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/purchase-orders", purchaseOrderRoutes);
+app.use("/api/ai", aiRoutes);
 
 // ─── 404 Handler ──────────────────────────────────────────
 app.use((_req, res) => {
