@@ -3,7 +3,7 @@ import authController from "../controllers/auth.controller.js";
 import validate from "../middleware/validate.js";
 import authenticate from "../middleware/authenticate.js";
 import authorize from "../middleware/authorize.js";
-import { loginLimiter } from "../middleware/rateLimiter.js";
+import { loginLimiter, loginIpLimiter } from "../middleware/rateLimiter.js";
 import {
   registerSchema,
   loginSchema,
@@ -35,9 +35,12 @@ router.post(
   authController.register
 );
 
-// Login — rate limited (max 5 attempts per 15 min per IP+email)
+// Login — rate limited:
+//   loginIpLimiter  — per IP (blocks rotating-email brute-force)
+//   loginLimiter    — per IP+email (protects individual accounts)
 router.post(
   "/login",
+  loginIpLimiter,
   loginLimiter,
   validate(loginSchema),
   authController.login

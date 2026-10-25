@@ -44,6 +44,7 @@ const auditLogSchema = new mongoose.Schema(
         "CHECKOUT",
         "STOCK_ADJUST",
         "REFUND",
+        "RECEIVE_STOCK",  // PurchaseOrder received / stock updated
       ],
       index: true,
     },
@@ -51,7 +52,7 @@ const auditLogSchema = new mongoose.Schema(
     entity: {
       type: String,
       required: true,
-      enum: ["Product", "Vendor", "Customer", "Sale", "User"],
+      enum: ["Product", "Vendor", "Customer", "Sale", "User", "PurchaseOrder"],
     },
 
     entityId: {

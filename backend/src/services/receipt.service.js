@@ -58,22 +58,23 @@ class ReceiptService {
     // Generate the PDF buffer
     const pdfBuffer = await this._generatePdf(sale);
 
-    // Upload to Cloudinary
-    const receiptUrl = await this._uploadToCloudinary(
+    // Upload to Cloudinary (private/authenticated) — returns the public_id
+    const receiptPublicId = await this._uploadToCloudinary(
       pdfBuffer,
       sale.invoiceNumber
     );
 
-    // Update the Sale document with the receipt URL
-    sale.receiptUrl = receiptUrl;
+    // Store the stable public_id on the Sale document.
+    // To serve the PDF, call receiptService.getSignedReceiptUrl(sale.receiptUrl).
+    sale.receiptUrl = receiptPublicId;
     await sale.save();
 
-    logger.info(`Receipt uploaded: ${sale.invoiceNumber}`, {
+    logger.info(`Receipt uploaded (private): ${sale.invoiceNumber}`, {
       saleId: sale._id,
-      receiptUrl,
+      receiptPublicId,
     });
 
-    return receiptUrl;
+    return receiptPublicId;
   }
 
   /**
@@ -271,7 +272,16 @@ class ReceiptService {
   }
 
   /**
-   * Upload a PDF buffer to Cloudinary.
+   * Upload a PDF buffer to Cloudinary as an authenticated (private) resource.
+   *
+   * Receipts are NOT public. Anyone who knows the Cloudinary cloud name and the
+   * invoice number (which is printed on receipts) can construct a direct URL to
+   * a public resource. Uploading with type:"authenticated" requires a signed URL
+   * to access the file, preventing enumeration.
+   *
+   * The Sale document stores the raw public_id (path), NOT the secure_url.
+   * Call getSignedReceiptUrl() to produce a short-lived URL for download.
+   *
    * @private
    */
   _uploadToCloudinary(buffer, invoiceNumber) {
@@ -279,8 +289,9 @@ class ReceiptService {
       const stream = cloudinary.uploader.upload_stream(
         {
           folder: "inventory-pos/receipts",
-          resource_type: "auto", // auto-detects PDF, serves with correct Content-Type
-          public_id: `${invoiceNumber}.pdf`,
+          resource_type: "raw",          // PDF is a raw file type
+          type: "authenticated",          // private — requires signed URL to access
+          public_id: `${invoiceNumber}`,  // no .pdf — Cloudinary adds it automatically for raw
           overwrite: true,
         },
         (error, result) => {
@@ -289,10 +300,28 @@ class ReceiptService {
               ApiError.internal("Receipt upload failed: " + error.message)
             );
           }
-          resolve(result.secure_url);
+          // Store the public_id (path), not the URL.
+          // The URL changes whenever the signature expires; the public_id is stable.
+          resolve(result.public_id);
         }
       );
       stream.end(buffer);
+    });
+  }
+
+  /**
+   * Generate a short-lived signed URL for a private receipt.
+   *
+   * @param {string} publicId - The Cloudinary public_id stored on the Sale document
+   * @param {number} [expiresInSeconds=3600] - URL validity window (default: 1 hour)
+   * @returns {string} A signed, time-limited URL for downloading the PDF
+   */
+  getSignedReceiptUrl(publicId, expiresInSeconds = 3600) {
+    if (!publicId) return null;
+    return cloudinary.utils.private_download_url(publicId, "pdf", {
+      resource_type: "raw",
+      type: "authenticated",
+      expires_at: Math.floor(Date.now() / 1000) + expiresInSeconds,
     });
   }
 
@@ -327,3 +356,4 @@ class ReceiptService {
 }
 
 export default new ReceiptService();
+

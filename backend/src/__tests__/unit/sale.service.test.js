@@ -179,12 +179,14 @@ describe("SaleService", () => {
     });
 
     it("should apply discount and tax to line items", async () => {
+      product1.taxRate = 18;
+      await product1.save();
+
       const cartItems = [
         {
           product: product1._id,
           quantity: 2,
           discountPercent: 10,
-          taxPercent: 18,
         },
       ];
 

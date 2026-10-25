@@ -6,42 +6,51 @@ import logger from "../config/logger.js";
 dotenv.config();
 
 /**
- * Seed Script — creates a default ADMIN user for development.
+ * Seed Script — creates the first ADMIN user.
  *
  * Run with:  npm run seed
  *
- * This is idempotent — if the admin already exists it logs and exits.
- * The default password should be changed immediately in production.
+ * Credentials are read from ADMIN_EMAIL and ADMIN_PASSWORD env vars.
+ * This is idempotent — exits cleanly if an ADMIN already exists.
+ *
+ * Example:
+ *   ADMIN_EMAIL=me@example.com ADMIN_PASSWORD=S3cr3t! npm run seed
  */
 
-const ADMIN_EMAIL = "admin@inventory-pos.com";
-const ADMIN_PASSWORD = "Admin@123456";
-
 const seedAdmin = async () => {
+  const adminEmail    = process.env.ADMIN_EMAIL;
+  const adminPassword = process.env.ADMIN_PASSWORD;
+
+  if (!adminEmail || !adminPassword) {
+    logger.error(
+      "❌  ADMIN_EMAIL and ADMIN_PASSWORD must be set before running the seed.\n" +
+      "    Example: ADMIN_EMAIL=you@co.com ADMIN_PASSWORD=Str0ng! npm run seed"
+    );
+    process.exit(1);
+  }
+
   try {
     await mongoose.connect(process.env.MONGO_URI);
     logger.info("Connected to MongoDB for seeding");
 
-    // Check if admin already exists
-    const existing = await User.findOne({ email: ADMIN_EMAIL });
+    // Idempotent — skip if ANY admin already exists
+    const existing = await User.findOne({ role: "ADMIN" });
     if (existing) {
-      logger.info(`Admin user already exists: ${ADMIN_EMAIL}`);
+      logger.info(`An ADMIN account already exists (${existing.email}). Seed skipped.`);
       process.exit(0);
     }
 
-    // Create admin user
     const admin = await User.create({
       name: "System Admin",
-      email: ADMIN_EMAIL,
-      password: ADMIN_PASSWORD,
+      email: adminEmail,
+      password: adminPassword,
       role: "ADMIN",
     });
 
-    logger.info(`✅ Admin user created:`);
-    logger.info(`   Email:    ${admin.email}`);
-    logger.info(`   Password: ${ADMIN_PASSWORD}`);
-    logger.info(`   Role:     ${admin.role}`);
-    logger.info(`   ⚠️  Change this password in production!`);
+    logger.info("✅ Admin user created:");
+    logger.info(`   Email: ${admin.email}`);
+    logger.info(`   Role:  ${admin.role}`);
+    logger.info("   ⚠️  Keep ADMIN_PASSWORD secret. Rotate it after first login.");
 
     process.exit(0);
   } catch (error) {

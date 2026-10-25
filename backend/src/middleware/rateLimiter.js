@@ -2,26 +2,53 @@ import rateLimit from "express-rate-limit";
 import env from "../config/env.js";
 
 /**
- * Rate limiter for the /login route.
+ * Rate Limiters
  *
+ * loginLimiter     — per IP+email (normalised) — prevents targeted account brute-force
+ * loginIpLimiter   — per IP only — prevents brute-force by rotating email addresses
+ * apiLimiter       — general API throttle (200 req/15 min)
+ *
+ * NOTE: app.set('trust proxy', 1) in app.js is required for req.ip to reflect
+ * the real client address behind Render/Nginx. Without it, all traffic shares
+ * one rate-limit bucket.
+ */
+
+/**
+ * Per IP+email login limiter.
  * Max 5 attempts per 15-minute window (configurable via env).
- * Returns a standardised JSON error instead of the default HTML.
- * Uses the default in-memory store — swap to redis-store in production
- * if running multiple server instances behind a load balancer.
  */
 export const loginLimiter = rateLimit({
   windowMs: env.LOGIN_RATE_LIMIT_WINDOW_MS,
   max: env.LOGIN_RATE_LIMIT_MAX,
-  standardHeaders: true, // RateLimit-* headers
-  legacyHeaders: false,  // disable X-RateLimit-*
+  standardHeaders: true,
+  legacyHeaders: false,
   message: {
     success: false,
     message: "Too many login attempts — please try again after 15 minutes",
   },
   keyGenerator: (req) => {
-    // Rate limit by IP + email to prevent locking out shared IPs
-    return `${req.ip}-${req.body?.email || "unknown"}`;
+    // Normalise email to lowercase so "Admin@x.com" and "admin@x.com"
+    // share the same bucket and can't bypass the limit by varying case.
+    const email = (req.body?.email || "").toLowerCase().trim();
+    return `login:${req.ip}:${email}`;
   },
+});
+
+/**
+ * Per-IP login limiter — secondary guard.
+ * Caps total login attempts per IP regardless of email, so an attacker
+ * cannot bypass the per-account limit by rotating email addresses.
+ */
+export const loginIpLimiter = rateLimit({
+  windowMs: env.LOGIN_RATE_LIMIT_WINDOW_MS,
+  max: env.LOGIN_RATE_LIMIT_MAX * 3, // slightly more generous than per-account
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    message: "Too many login attempts from this IP — please try again later",
+  },
+  keyGenerator: (req) => `login-ip:${req.ip}`,
 });
 
 /**
@@ -36,4 +63,6 @@ export const apiLimiter = rateLimit({
     success: false,
     message: "Too many requests — please slow down",
   },
+  keyGenerator: (req) => req.ip, // explicit — uses the trust-proxy-corrected IP
 });
+

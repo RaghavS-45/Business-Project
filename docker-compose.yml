@@ -9,8 +9,13 @@
 #  Services:
 #    frontend  → http://localhost:3000
 #    backend   → http://localhost:5000
-#    mongodb   → localhost:27017
-#    redis     → localhost:6379
+#    mongodb   → localhost:27017  (loopback only — not internet-accessible)
+#    redis     → localhost:6379   (loopback only — not internet-accessible)
+#
+#  Required env vars (must be set before running):
+#    JWT_ACCESS_SECRET    — at least 32 random characters
+#    JWT_REFRESH_SECRET   — at least 32 random characters
+#    CLOUDINARY_CLOUD_NAME / CLOUDINARY_API_KEY / CLOUDINARY_API_SECRET
 # ──────────────────────────────────────────────────────────
 
 services:
@@ -19,7 +24,9 @@ services:
     image: mongo:7
     container_name: pos-mongodb
     ports:
-      - "27017:27017"
+      # Bind to loopback only — prevents internet exposure on a VPS.
+      # Remove this ports: entry entirely if you don't need local DB access.
+      - "127.0.0.1:27017:27017"
     volumes:
       - mongodb_data:/data/db
     healthcheck:
@@ -34,7 +41,8 @@ services:
     image: redis:7-alpine
     container_name: pos-redis
     ports:
-      - "6379:6379"
+      # Bind to loopback only — prevents BullMQ job injection from the internet.
+      - "127.0.0.1:6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -57,17 +65,22 @@ services:
       NODE_ENV: production
       PORT: 5000
       MONGO_URI: mongodb://mongodb:27017/inventory-pos
-      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-change-me-access-secret-at-least-16-chars}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-me-refresh-secret-at-least-16-chars}
+      # :? syntax — Compose will refuse to start if these are unset or empty.
+      # Generate with: openssl rand -hex 32
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?JWT_ACCESS_SECRET is required. Generate with: openssl rand -hex 32}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?JWT_REFRESH_SECRET is required. Generate with: openssl rand -hex 32}
       JWT_ACCESS_EXPIRES_IN: 15m
       JWT_REFRESH_EXPIRES_IN: 7d
       LOGIN_RATE_LIMIT_WINDOW_MS: 900000
       LOGIN_RATE_LIMIT_MAX: 5
       CORS_ORIGIN: http://localhost:3000
       REDIS_URL: redis://redis:6379
-      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-placeholder}
-      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-placeholder}
-      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-placeholder}
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:?CLOUDINARY_CLOUD_NAME is required}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:?CLOUDINARY_API_KEY is required}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:?CLOUDINARY_API_SECRET is required}
+      # Admin seed credentials — set these before first run, then remove or rotate
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       STORE_NAME: "Inventory POS"
       STORE_PHONE: ""
       STORE_ADDRESS: ""
@@ -88,3 +101,4 @@ services:
 
 volumes:
   mongodb_data:
+

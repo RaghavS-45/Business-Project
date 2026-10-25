@@ -35,6 +35,12 @@ import purchaseOrderRoutes from "./routes/purchaseOrder.routes.js";
 
 const app = express();
 
+// ─── Trust Proxy ─────────────────────────────────────────
+// Required for accurate req.ip behind reverse proxies (Render, Nginx, etc.).
+// Without this, req.ip returns the proxy's IP for every client, which puts
+// all users into the same rate-limit bucket and breaks per-IP throttling.
+app.set("trust proxy", 1);
+
 // ─── Security Middleware ──────────────────────────────────
 app.use(
   helmet({

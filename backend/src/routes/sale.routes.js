@@ -18,13 +18,14 @@ const router = Router();
  * Checkout is available to all roles (ADMIN, MANAGER, CASHIER).
  * Listing, summary, and refund are restricted to ADMIN/MANAGER.
  *
- * POST   /api/sales/checkout       — Process a checkout
- * GET    /api/sales                — List sales (paginated)
- * GET    /api/sales/summary/daily  — Daily sales summary
- * GET    /api/sales/:id            — Get sale details
- * POST   /api/sales/:id/refund     — Process a refund
+ * POST   /api/sales/checkout         — Process a checkout
+ * GET    /api/sales                  — List sales (paginated)
+ * GET    /api/sales/summary/daily    — Daily sales summary
+ * GET    /api/sales/:id              — Get sale details
+ * GET    /api/sales/:id/receipt      — Get a short-lived signed receipt URL
+ * POST   /api/sales/:id/refund       — Process a refund
  *
- * NOTE: /checkout and /summary/daily are registered BEFORE /:id
+ * NOTE: /checkout, /summary/daily, and /:id/receipt are registered BEFORE /:id
  * to prevent Express treating "checkout" or "summary" as an ObjectId.
  */
 
@@ -56,6 +57,9 @@ router.get(
 // ─── Get single sale ─────────────────────────────────────
 router.get("/:id", saleController.getById);
 
+// ─── Get signed receipt URL (short-lived, private) ───────
+router.get("/:id/receipt", saleController.getReceipt);
+
 // ─── Refund ──────────────────────────────────────────────
 router.post(
   "/:id/refund",
@@ -65,3 +69,4 @@ router.post(
 );
 
 export default router;
+

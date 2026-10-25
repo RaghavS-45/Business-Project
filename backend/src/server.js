@@ -22,18 +22,36 @@ import User from "./models/User.js";
 const seedAdmin = async () => {
   try {
     const adminExists = await User.findOne({ role: "ADMIN" });
-    if (!adminExists) {
-      await User.create({
-        name: "System Admin",
-        email: "admin@inventory-pos.com",
-        password: "Admin@123456",
-        role: "ADMIN",
-      });
-      logger.info("✅ Default admin user created (admin@inventory-pos.com)");
-      logger.info("   ⚠️  Change this password after first login!");
+    if (adminExists) return; // At least one admin already in DB — skip
+
+    // Require credentials to be explicitly set via environment variables.
+    // We deliberately do NOT fall back to a default so that a publicly-known
+    // password can never end up in a production database.
+    const adminEmail    = process.env.ADMIN_EMAIL;
+    const adminPassword = process.env.ADMIN_PASSWORD;
+
+    if (!adminEmail || !adminPassword) {
+      logger.error(
+        "❌  No ADMIN user found and ADMIN_EMAIL / ADMIN_PASSWORD env vars are not set.\n" +
+        "    Set them and restart, or create an admin manually via the DB."
+      );
+      // In production this is fatal — refuse to start with no admin account.
+      if (process.env.NODE_ENV === "production") {
+        process.exit(1);
+      }
+      return;
     }
+
+    await User.create({
+      name: "System Admin",
+      email: adminEmail,
+      password: adminPassword,
+      role: "ADMIN",
+    });
+    logger.info(`✅ Admin user created from env vars: ${adminEmail}`);
+    logger.info("   ⚠️  Treat ADMIN_PASSWORD as a secret — rotate it after first login!");
   } catch (err) {
-    // Don't crash the server if seeding fails (e.g. duplicate key on race)
+    // Ignore duplicate-key races (two instances starting simultaneously)
     if (err.code !== 11000) {
       logger.error("Auto-seed failed:", err.message);
     }

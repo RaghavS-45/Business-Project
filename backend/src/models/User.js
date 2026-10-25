@@ -66,7 +66,7 @@ const userSchema = new mongoose.Schema(
 );
 
 // ─── Indexes ──────────────────────────────────────────────
-userSchema.index({ email: 1 });
+// Note: email already has a unique index created by `unique: true` in the schema definition.
 userSchema.index({ role: 1 });
 
 // ─── Pre-save: hash password if modified ──────────────────

@@ -73,39 +73,31 @@ class AuditService {
    * @returns {Promise<Object>} The created AuditLog document
    */
   async log(action, entity, entityId, userId, { before = null, after = null, metadata = {} } = {}) {
-    try {
-      const changes = this.computeChanges(before, after);
+    // No try/catch here — the error is intentionally allowed to propagate.
+    // When called from a BullMQ worker, a thrown error causes the job to be
+    // retried (up to opts.attempts), then moved to the DLQ.
+    // Swallowing the error would mark the job "completed" even though
+    // nothing was written, giving false confidence in audit coverage.
+    const changes = this.computeChanges(before, after);
 
-      const entry = await AuditLog.create({
-        action,
-        entity,
-        entityId,
-        userId,
-        before,
-        after,
-        changes,
-        metadata,
-      });
+    const entry = await AuditLog.create({
+      action,
+      entity,
+      entityId,
+      userId,
+      before,
+      after,
+      changes,
+      metadata,
+    });
 
-      logger.audit(`${action} ${entity} ${entityId}`, {
-        auditId: entry._id,
-        userId,
-        changedFields: changes.map((c) => c.field),
-      });
+    logger.audit(`${action} ${entity} ${entityId}`, {
+      auditId: entry._id,
+      userId,
+      changedFields: changes.map((c) => c.field),
+    });
 
-      return entry;
-    } catch (error) {
-      // Audit log failures should never crash the main operation
-      // Log the error and continue — the business operation has already succeeded
-      logger.error("Failed to write audit log", {
-        action,
-        entity,
-        entityId,
-        userId,
-        error: error.message,
-      });
-      return null;
-    }
+    return entry;
   }
 
   /**

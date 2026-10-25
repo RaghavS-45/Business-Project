@@ -75,9 +75,19 @@ class SaleService {
    * @returns {Promise<Object>}    - The created Sale document
    */
   async checkout(cartItems, customerId, paymentMethod, cashierUser, notes = "") {
+    // ── Role-based discount caps ─────────────────────────────
+    // Cashiers cannot set arbitrary discounts.
+    const DISCOUNT_CAPS = {
+      CASHIER: 10,   // max 10% per item
+      MANAGER: 30,   // max 30% per item
+      ADMIN:   100,  // unlimited
+    };
+    const maxDiscount = DISCOUNT_CAPS[cashierUser.role] ?? 0;
+
     const session = await mongoose.startSession();
     session.startTransaction();
 
+    let sale; // declared outside try so it's visible in the post-commit block
     try {
       const saleItems = [];
       let subtotal = 0;
@@ -86,6 +96,18 @@ class SaleService {
 
       // ─── Process each cart item within the transaction ───
       for (const item of cartItems) {
+        // ── Validate discount cap ────────────────────────
+        const discountPercent = item.discountPercent || 0;
+        if (discountPercent < 0 || discountPercent > 100) {
+          throw ApiError.badRequest(`Invalid discountPercent: ${discountPercent}`);
+        }
+        if (discountPercent > maxDiscount) {
+          throw ApiError.badRequest(
+            `Your role (${cashierUser.role}) allows a maximum discount of ${maxDiscount}%. ` +
+            `Requested: ${discountPercent}%.`
+          );
+        }
+
         // Atomically decrement stock with optimistic lock
         // The $gte guard ensures stock never goes negative
         const product = await Product.findOneAndUpdate(
@@ -117,9 +139,9 @@ class SaleService {
           );
         }
 
-        // Compute line total
-        const discountPercent = item.discountPercent || 0;
-        const taxPercent = item.taxPercent || 0;
+        // Tax is always read from the product — never from the request body.
+        const taxPercent = product.taxRate ?? 0;
+
         const lineTotal = this._computeLineTotal(
           item.quantity,
           product.sellingPrice,
@@ -161,7 +183,7 @@ class SaleService {
       const invoiceNumber = await this._generateInvoiceNumber();
 
       // Create the Sale document within the transaction
-      const [sale] = await Sale.create(
+      const [created] = await Sale.create(
         [
           {
             invoiceNumber,
@@ -178,6 +200,7 @@ class SaleService {
         ],
         { session }
       );
+      sale = created;
 
       // Update customer loyalty if not a walk-in
       if (customerId) {
@@ -204,10 +227,22 @@ class SaleService {
         itemCount: saleItems.length,
         grandTotal,
       });
+    } catch (error) {
+      // Roll back the entire transaction on any error
+      await session.abortTransaction();
+      logger.error("Checkout failed — transaction rolled back", {
+        error: error.message,
+        cashier: cashierUser?.email,
+      });
+      throw error;
+    } finally {
+      session.endSession();
+    }
 
-      // ─── Enqueue background jobs (outside transaction) ──
-      // These are fire-and-forget — if they fail, they'll be retried
-      // by BullMQ. The sale is already committed.
+    // ─── Enqueue background jobs (AFTER commit, outside transaction) ──
+    // A failure here must never cause a 500 that misleads the cashier into
+    // retrying — the sale is already committed and money has changed hands.
+    try {
       await addJob(QUEUE_NAMES.RECEIPT_GENERATION, "generate-receipt", {
         saleId: sale._id.toString(),
       });
@@ -220,26 +255,23 @@ class SaleService {
         before: null,
         after: sale.toJSON(),
         metadata: {
-          invoiceNumber,
-          grandTotal,
-          itemCount: saleItems.length,
+          invoiceNumber: sale.invoiceNumber,
+          grandTotal: sale.grandTotal,
+          itemCount: sale.items.length,
           paymentMethod,
         },
       });
-
-      return sale;
-    } catch (error) {
-      // Roll back the entire transaction on any error
-      await session.abortTransaction();
-      logger.error("Checkout failed — transaction rolled back", {
-        error: error.message,
-        cashier: cashierUser?.email,
+    } catch (queueError) {
+      // Log but never propagate — the cashier's screen must show success.
+      logger.error("Post-checkout job enqueue failed (sale already committed)", {
+        saleId: sale._id,
+        error: queueError.message,
       });
-      throw error;
-    } finally {
-      session.endSession();
     }
+
+    return sale;
   }
+
 
   /**
    * Get a single sale by ID with populated references.

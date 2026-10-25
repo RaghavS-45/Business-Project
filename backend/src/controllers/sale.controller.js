@@ -1,19 +1,23 @@
 import saleService from "../services/sale.service.js";
+import receiptService from "../services/receipt.service.js";
 
 /**
  * Sale Controller — thin HTTP layer for checkout and sales management.
  *
- * POST   /api/sales/checkout       — Process a checkout
- * GET    /api/sales                — List sales (paginated, filterable)
- * GET    /api/sales/summary/daily  — Daily sales summary
- * GET    /api/sales/:id            — Get sale details
- * POST   /api/sales/:id/refund     — Process a refund
+ * POST   /api/sales/checkout         — Process a checkout
+ * GET    /api/sales                  — List sales (paginated, filterable)
+ * GET    /api/sales/summary/daily    — Daily sales summary
+ * GET    /api/sales/:id              — Get sale details
+ * GET    /api/sales/:id/receipt      — Get a short-lived signed receipt URL
+ * POST   /api/sales/:id/refund       — Process a refund
  */
 class SaleController {
   /**
    * POST /api/sales/checkout
-   * Body: { items: [{ product, quantity, discountPercent?, taxPercent? }],
+   * Body: { items: [{ product, quantity, discountPercent? }],
    *         customerId?, paymentMethod, notes? }
+   * Note: taxPercent in the request body is ignored — tax is always
+   *       read from the product's taxRate field.
    * Access: ADMIN | MANAGER | CASHIER
    */
   async checkout(req, res, next) {
@@ -90,6 +94,33 @@ class SaleController {
   }
 
   /**
+   * GET /api/sales/:id/receipt
+   * Returns a short-lived signed Cloudinary URL for the receipt PDF.
+   * The URL expires in 1 hour. Re-request for a fresh link.
+   * Access: authenticated (cashier can download their own sales' receipts)
+   */
+  async getReceipt(req, res, next) {
+    try {
+      const sale = await saleService.getById(req.params.id);
+
+      if (!sale.receiptUrl) {
+        return res.status(202).json({
+          success: false,
+          message: "Receipt is not yet ready — please try again in a few seconds",
+        });
+      }
+
+      const signedUrl = receiptService.getSignedReceiptUrl(sale.receiptUrl);
+      res.status(200).json({
+        success: true,
+        data: { signedUrl, expiresInSeconds: 3600 },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * POST /api/sales/:id/refund
    * Body: { reason: "Customer returned items" }
    * Access: ADMIN | MANAGER
@@ -113,3 +144,4 @@ class SaleController {
 }
 
 export default new SaleController();
+

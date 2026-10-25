@@ -28,6 +28,23 @@ class UserController {
             res.json({ success: true, ...result });
         } catch (e) { next(e); }
     }
+
+    /**
+     * PATCH /api/users/me/password
+     * Body: { oldPassword, newPassword }
+     * Access: Any authenticated user (self-service)
+     */
+    async changePassword(req, res, next) {
+        try {
+            const { oldPassword, newPassword } = req.body;
+            const result = await userService.changePassword(
+                req.user._id.toString(),
+                oldPassword,
+                newPassword
+            );
+            res.json({ success: true, ...result });
+        } catch (e) { next(e); }
+    }
 }
 
 export default new UserController();

@@ -42,6 +42,31 @@ class UserService {
         const before = await User.findById(id).lean();
         if (!before) throw ApiError.notFound("User not found");
 
+        // ── Self-demotion guard ───────────────────────────────────────
+        if (requestingUserId && id === requestingUserId.toString()) {
+            if (role && role !== before.role) {
+                throw ApiError.badRequest("You cannot change your own role");
+            }
+            if (isActive === false) {
+                throw ApiError.badRequest("You cannot deactivate your own account");
+            }
+        }
+
+        // ── Last-admin guard ─────────────────────────────────────────
+        // If we're about to demote or deactivate an ADMIN, make sure at
+        // least one other active ADMIN will remain.
+        const isDemoting    = role && role !== "ADMIN" && before.role === "ADMIN";
+        const isDeactivating = isActive === false && before.isActive;
+
+        if ((isDemoting || isDeactivating) && before.role === "ADMIN") {
+            const adminCount = await User.countDocuments({ role: "ADMIN", isActive: true });
+            if (adminCount <= 1) {
+                throw ApiError.badRequest(
+                    "Cannot remove the last active ADMIN. Promote another user first."
+                );
+            }
+        }
+
         const user = await User.findByIdAndUpdate(
             id,
             { ...(role && { role }), ...(isActive !== undefined && { isActive }) },
@@ -69,6 +94,19 @@ class UserService {
         if (id === requestingUserId.toString())
             throw ApiError.badRequest("Cannot delete your own account");
 
+        // ── Last-admin guard ─────────────────────────────────────────
+        const target = await User.findById(id).lean();
+        if (!target) throw ApiError.notFound("User not found");
+
+        if (target.role === "ADMIN") {
+            const adminCount = await User.countDocuments({ role: "ADMIN", isActive: true });
+            if (adminCount <= 1) {
+                throw ApiError.badRequest(
+                    "Cannot delete the last active ADMIN. Promote another user first."
+                );
+            }
+        }
+
         const user = await User.findByIdAndDelete(id);
         if (!user) throw ApiError.notFound("User not found");
         logger.info(`User deleted: ${user.email}`);
@@ -84,6 +122,32 @@ class UserService {
         });
 
         return { message: "User deleted successfully" };
+    }
+
+    /**
+     * Change the password for the requesting user.
+     * Verifies the current password before accepting the new one.
+     *
+     * @param {string} userId      - The authenticated user's _id
+     * @param {string} oldPassword - The user's current password (plaintext)
+     * @param {string} newPassword - The desired new password (plaintext)
+     */
+    async changePassword(userId, oldPassword, newPassword) {
+        const user = await User.findById(userId).select("+password");
+        if (!user) throw ApiError.notFound("User not found");
+
+        const isMatch = await user.comparePassword(oldPassword);
+        if (!isMatch) throw ApiError.badRequest("Current password is incorrect");
+
+        if (oldPassword === newPassword) {
+            throw ApiError.badRequest("New password must differ from the current password");
+        }
+
+        user.password = newPassword; // hashed by the pre-save hook
+        await user.save();
+
+        logger.info(`Password changed for user: ${user.email}`);
+        return { message: "Password changed successfully" };
     }
 }
 

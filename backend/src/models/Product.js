@@ -136,6 +136,16 @@ const productSchema = new mongoose.Schema(
       },
     },
 
+    // ─── Tax Rate ───────────────────────────────────────────
+    // GST / VAT percentage applied at checkout.
+    // Set per-product so tax is never controlled by the cashier.
+    taxRate: {
+      type: Number,
+      min: [0, "Tax rate cannot be negative"],
+      max: [100, "Tax rate cannot exceed 100%"],
+      default: 0,
+    },
+
     // ─── Vendor Reference ───────────────────────────────────
     vendor: {
       type: mongoose.Schema.Types.ObjectId,
