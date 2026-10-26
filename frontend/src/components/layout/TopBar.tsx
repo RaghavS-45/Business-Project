@@ -20,6 +20,7 @@ interface TopBarProps {
 
 export default function TopBar({ onMenuClick }: TopBarProps) {
   const user = useAuthStore((s) => s.user);
+  const firstName = user?.name?.trim().split(" ")[0];
   const logoutMutation = useLogout();
   const [isDark, setIsDark] = useState(true);
 
@@ -64,7 +65,7 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
 
         <div className="hidden sm:block">
           <h2 className="text-sm font-medium text-foreground">
-            Welcome back
+            Welcome back{firstName ? `, ${firstName}` : ""}
           </h2>
           <p className="text-xs text-muted-foreground">
             {new Date().toLocaleDateString("en-US", {
