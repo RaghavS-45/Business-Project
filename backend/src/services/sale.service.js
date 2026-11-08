@@ -6,6 +6,9 @@ import ApiError from "../utils/ApiError.js";
 import logger from "../config/logger.js";
 import { addJob, QUEUE_NAMES } from "../config/queue.js";
 
+import { getTier } from "../utils/loyalty.js";
+import LoyaltyTransaction from "../models/LoyaltyTransaction.js";
+
 /**
  * Sale Service — Checkout Pipeline with Mongoose Transactions
  *
@@ -58,10 +61,11 @@ class SaleService {
    *
    * @private
    */
-  _computeLineTotal(quantity, unitPrice, discountPercent, taxPercent) {
-    const discounted = unitPrice * (1 - discountPercent / 100);
-    const taxed = discounted * (1 + taxPercent / 100);
-    return Math.round(quantity * taxed * 100) / 100; // Round to 2 decimal places
+  _computeLineTotal(quantity, unitPrice, discountPercent, taxPercent, loyaltyPercent = 0) {
+    const afterItemDiscount = unitPrice * (1 - discountPercent / 100);
+    const afterLoyalty = afterItemDiscount * (1 - loyaltyPercent / 100);
+    const taxed = afterLoyalty * (1 + taxPercent / 100);
+    return Math.round(quantity * taxed * 100) / 100;
   }
 
   /**
@@ -93,6 +97,18 @@ class SaleService {
       let subtotal = 0;
       let taxTotal = 0;
       let discountTotal = 0;
+
+      let loyaltyPercent = 0;
+      let loyaltyTier = null;
+      let loyaltyDiscountTotal = 0;
+
+      if (customerId) {
+        const customer = await Customer.findById(customerId).session(session);
+        if (!customer) throw ApiError.notFound(`Customer not found: ${customerId}`);
+        const tier = getTier(customer.loyaltyPoints); // tier BEFORE this sale
+        loyaltyPercent = tier.discount;
+        loyaltyTier = tier.name;
+      }
 
       // ─── Process each cart item within the transaction ───
       for (const item of cartItems) {
@@ -146,17 +162,20 @@ class SaleService {
           item.quantity,
           product.sellingPrice,
           discountPercent,
-          taxPercent
+          taxPercent,
+          loyaltyPercent
         );
 
-        // Pre-tax, pre-discount line value (for totals calculation)
         const rawLineValue = item.quantity * product.sellingPrice;
         const discountAmount = rawLineValue * (discountPercent / 100);
-        const taxableAmount = rawLineValue - discountAmount;
+        const afterItemDiscount = rawLineValue - discountAmount;
+        const loyaltyAmount = afterItemDiscount * (loyaltyPercent / 100);
+        const taxableAmount = afterItemDiscount - loyaltyAmount;
         const taxAmount = taxableAmount * (taxPercent / 100);
 
         subtotal += rawLineValue;
         discountTotal += discountAmount;
+        loyaltyDiscountTotal += loyaltyAmount;
         taxTotal += taxAmount;
 
         // Snapshot product data into the line item
@@ -177,7 +196,9 @@ class SaleService {
       subtotal = Math.round(subtotal * 100) / 100;
       taxTotal = Math.round(taxTotal * 100) / 100;
       discountTotal = Math.round(discountTotal * 100) / 100;
-      const grandTotal = Math.round((subtotal - discountTotal + taxTotal) * 100) / 100;
+      loyaltyDiscountTotal = Math.round(loyaltyDiscountTotal * 100) / 100;
+      const grandTotal =
+        Math.round((subtotal - discountTotal - loyaltyDiscountTotal + taxTotal) * 100) / 100;
 
       // Generate invoice number
       const invoiceNumber = await this._generateInvoiceNumber();
@@ -193,6 +214,9 @@ class SaleService {
             subtotal,
             taxTotal,
             discountTotal,
+            loyaltyTier,
+            loyaltyDiscountPercent: loyaltyPercent,
+            loyaltyDiscountTotal,
             grandTotal,
             paymentMethod,
             notes,
@@ -204,20 +228,21 @@ class SaleService {
 
       // Update customer loyalty if not a walk-in
       if (customerId) {
-        const loyaltyPoints = Math.floor(grandTotal / 100); // 1 point per ₹100
+          const loyaltyPoints = Math.floor(grandTotal / 100);
 
-        await Customer.findByIdAndUpdate(
-          customerId,
-          {
-            $inc: {
-              totalPurchases: grandTotal,
-              loyaltyPoints,
-            },
-          },
-          { session }
-        );
+          await Customer.findByIdAndUpdate(
+            customerId,
+            { $inc: { totalPurchases: grandTotal, loyaltyPoints } },
+            { session }
+          );
+
+          if (loyaltyPoints > 0) {
+            await LoyaltyTransaction.create(
+              [{ customer: customerId, sale: sale._id, points: loyaltyPoints, type: "earn" }],
+              { session }
+            );
+          }
       }
-
       // ─── Commit the transaction ─────────────────────────
       await session.commitTransaction();
 
@@ -383,21 +408,37 @@ class SaleService {
       }
 
       // Reverse customer loyalty
+      // Reverse customer loyalty
       if (sale.customer) {
-        const loyaltyPoints = Math.floor(sale.grandTotal / 100);
+        const earned = await LoyaltyTransaction.findOne({
+          sale: sale._id,
+          type: "earn",
+        }).session(session);
 
-        await Customer.findByIdAndUpdate(
-          sale.customer,
-          {
-            $inc: {
-              totalPurchases: -sale.grandTotal,
-              loyaltyPoints: -loyaltyPoints,
-            },
-          },
-          { session }
-        );
+        const customer = await Customer.findById(sale.customer).session(session);
+
+        if (customer) {
+          // Old sales (before the ledger existed) have no earn row, so fall back to the formula
+          const earnedPoints = earned?.points ?? Math.floor(sale.grandTotal / 100);
+
+          // Never deduct more than the customer currently has
+          const pointsBack = Math.min(earnedPoints, customer.loyaltyPoints);
+          const purchasesBack = Math.min(sale.grandTotal, customer.totalPurchases);
+
+          await Customer.updateOne(
+            { _id: customer._id },
+            { $inc: { loyaltyPoints: -pointsBack, totalPurchases: -purchasesBack } },
+            { session }
+          );
+
+          if (pointsBack > 0) {
+            await LoyaltyTransaction.create(
+              [{ customer: customer._id, sale: sale._id, points: -pointsBack, type: "reverse" }],
+              { session }
+            );
+          }
+        }
       }
-
       // Mark sale as refunded
       sale.status = "REFUNDED";
       sale.paymentStatus = "REFUNDED";

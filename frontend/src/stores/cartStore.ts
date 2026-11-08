@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { getTier } from "@/lib/loyalty";
 
 export interface CartItem {
   product: string; // product _id
@@ -17,6 +18,7 @@ interface CartState {
   items: CartItem[];
   selectedCustomer: string | null;
   customerName: string | null;
+  customerLoyaltyPoints: number;
   paymentMethod: "CASH" | "CARD" | "UPI" | "OTHER";
   notes: string;
 
@@ -26,7 +28,8 @@ interface CartState {
   updateQuantity: (productId: string, quantity: number) => void;
   updateDiscount: (productId: string, discountPercent: number) => void;
   updateTax: (productId: string, taxPercent: number) => void;
-  setCustomer: (customerId: string | null, customerName?: string | null) => void;
+  setCustomer: (customerId: string | null, customerName?: string | null, loyaltyPoints?: number) => void;
+  
   setPaymentMethod: (method: "CASH" | "CARD" | "UPI" | "OTHER") => void;
   setNotes: (notes: string) => void;
   clearCart: () => void;
@@ -36,15 +39,19 @@ interface CartState {
   getTaxTotal: () => number;
   getDiscountTotal: () => number;
   getGrandTotal: () => number;
+  getLoyaltyPercent: () => number;        
+  getLoyaltyDiscountTotal: () => number;  
+  getPointsToEarn: () => number;          
 }
 
 /**
  * Compute the line total for a cart item.
  * Formula: qty * unitPrice * (1 - discount/100) * (1 + tax/100)
  */
-const computeLineTotal = (item: CartItem): number => {
-  const discounted = item.unitPrice * (1 - item.discountPercent / 100);
-  const taxed = discounted * (1 + item.taxPercent / 100);
+const computeLineTotal = (item: CartItem, loyaltyPercent = 0): number => {
+  const afterItemDiscount = item.unitPrice * (1 - item.discountPercent / 100);
+  const afterLoyalty = afterItemDiscount * (1 - loyaltyPercent / 100);
+  const taxed = afterLoyalty * (1 + item.taxPercent / 100);
   return Math.round(item.quantity * taxed * 100) / 100;
 };
 
@@ -52,6 +59,7 @@ export const useCartStore = create<CartState>()((set, get) => ({
   items: [],
   selectedCustomer: null,
   customerName: null,
+  customerLoyaltyPoints: 0,
   paymentMethod: "CASH",
   notes: "",
 
@@ -107,8 +115,12 @@ export const useCartStore = create<CartState>()((set, get) => ({
       ),
     })),
 
-  setCustomer: (customerId, customerName = null) =>
-    set({ selectedCustomer: customerId, customerName }),
+    setCustomer: (customerId, customerName = null, loyaltyPoints = 0) =>
+    set({
+      selectedCustomer: customerId,
+      customerName,
+      customerLoyaltyPoints: customerId ? loyaltyPoints : 0,
+    }),
 
   setPaymentMethod: (method) => set({ paymentMethod: method }),
 
@@ -119,6 +131,7 @@ export const useCartStore = create<CartState>()((set, get) => ({
       items: [],
       selectedCustomer: null,
       customerName: null,
+      customerLoyaltyPoints: 0,
       paymentMethod: "CASH",
       notes: "",
     }),
@@ -126,15 +139,6 @@ export const useCartStore = create<CartState>()((set, get) => ({
   getSubtotal: () => {
     const { items } = get();
     return items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
-  },
-
-  getTaxTotal: () => {
-    const { items } = get();
-    return items.reduce((sum, item) => {
-      const discounted = item.unitPrice * (1 - item.discountPercent / 100);
-      const tax = discounted * (item.taxPercent / 100);
-      return sum + item.quantity * tax;
-    }, 0);
   },
 
   getDiscountTotal: () => {
@@ -145,8 +149,41 @@ export const useCartStore = create<CartState>()((set, get) => ({
     }, 0);
   },
 
-  getGrandTotal: () => {
+  getLoyaltyPercent: () => {
+    const { selectedCustomer, customerLoyaltyPoints } = get();
+    return selectedCustomer ? getTier(customerLoyaltyPoints).discount : 0;
+  },
+
+  getLoyaltyDiscountTotal: () => {
     const { items } = get();
-    return items.reduce((sum, item) => sum + computeLineTotal(item), 0);
+    const pct = get().getLoyaltyPercent();
+    return items.reduce((sum, item) => {
+      const afterItemDiscount =
+        item.quantity * item.unitPrice * (1 - item.discountPercent / 100);
+      return sum + afterItemDiscount * (pct / 100);
+    }, 0);
+  },
+
+  getTaxTotal: () => {
+    const { items } = get();
+    const pct = get().getLoyaltyPercent();
+    return items.reduce((sum, item) => {
+      const taxable =
+        item.unitPrice * (1 - item.discountPercent / 100) * (1 - pct / 100);
+      return sum + item.quantity * taxable * (item.taxPercent / 100);
+    }, 0);
+  },
+
+  getGrandTotal: () => {
+    const r = (n: number) => Math.round(n * 100) / 100;
+    const g = get();
+    return r(
+      g.getSubtotal() - g.getDiscountTotal() - g.getLoyaltyDiscountTotal() + g.getTaxTotal()
+    );
+  },
+
+  getPointsToEarn: () => {
+    const { selectedCustomer } = get();
+    return selectedCustomer ? Math.floor(get().getGrandTotal() / 100) : 0;
   },
 }));

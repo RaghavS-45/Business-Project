@@ -51,6 +51,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { getTier } from "@/lib/loyalty";
 
 const PAYMENT_METHODS = [
   { value: "CASH", label: "Cash", icon: Banknote },
@@ -83,6 +84,7 @@ export default function PosPage() {
     items: cartItems,
     selectedCustomer,
     customerName,
+    customerLoyaltyPoints,
     paymentMethod,
     notes,
     addItem,
@@ -95,6 +97,9 @@ export default function PosPage() {
     getSubtotal,
     getTaxTotal,
     getDiscountTotal,
+    getLoyaltyPercent,            // NEW
+    getLoyaltyDiscountTotal,      // NEW
+    getPointsToEarn,
     getGrandTotal,
   } = useCartStore();
 
@@ -175,6 +180,10 @@ export default function PosPage() {
   const subtotal = getSubtotal();
   const taxTotal = getTaxTotal();
   const discountTotal = getDiscountTotal();
+  const loyaltyPercent = getLoyaltyPercent();
+  const loyaltyTotal = getLoyaltyDiscountTotal();
+  const pointsToEarn = getPointsToEarn();
+  const tierName = getTier(customerLoyaltyPoints).name;
   const PaymentIcon = PAYMENT_METHODS.find((m) => m.value === paymentMethod)?.icon || Banknote;
 
   return (
@@ -348,13 +357,13 @@ export default function PosPage() {
                       )}
                     </CommandItem>
                     {customers.map(
-                      (c: { _id: string; name: string; phone?: string }) => (
+                      (c: { _id: string; name: string; phone?: string; loyaltyPoints?: number }) => (
                         <CommandItem
                           key={c._id}
                           onSelect={() => {
-                            setCustomer(c._id, c.name);
-                            setCustomerOpen(false);
-                          }}
+            setCustomer(c._id, c.name, c.loyaltyPoints ?? 0);
+            setCustomerOpen(false);
+          }}
                         >
                           <span>{c.name}</span>
                           {c.phone && (
@@ -478,6 +487,12 @@ export default function PosPage() {
                   <span>-₹{discountTotal.toFixed(2)}</span>
                 </div>
               )}
+              {selectedCustomer && loyaltyPercent > 0 && (
+                <div className="flex justify-between text-emerald-400">
+                  <span>Loyalty ({tierName} {loyaltyPercent}%)</span>
+                  <span>-₹{loyaltyTotal.toFixed(2)}</span>
+                </div>
+              )}
               {taxTotal > 0 && (
                 <div className="flex justify-between text-muted-foreground">
                   <span>Tax</span>
@@ -491,6 +506,11 @@ export default function PosPage() {
                   ₹{grandTotal.toFixed(2)}
                 </span>
               </div>
+              {selectedCustomer && (
+                <p className="text-xs text-muted-foreground text-right">
+                  You'll earn {pointsToEarn} points
+                </p>
+              )}
             </div>
 
             {/* Payment method */}

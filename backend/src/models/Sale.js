@@ -119,6 +119,14 @@ const saleSchema = new mongoose.Schema(
       default: 0,
     },
 
+    loyaltyTier: {
+    type: String,
+    enum: ["Bronze", "Silver", "Gold", "Platinum"],
+    default: null,
+  },
+    loyaltyDiscountPercent: { type: Number, min: 0, max: 100, default: 0 },
+    loyaltyDiscountTotal:   { type: Number, min: 0, default: 0 },
+
     grandTotal: {
       type: Number,
       required: true,
