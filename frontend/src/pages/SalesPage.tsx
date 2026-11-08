@@ -292,6 +292,10 @@ export default function SalesPage() {
                   <p className="font-medium">{saleDetail.cashier?.name || "—"}</p>
                 </div>
               </div>
+              <div>
+                  <p className="text-xs text-muted-foreground">Customer</p>
+                  <p className="font-medium">{saleDetail.customer?.name || "Walk-in"}</p>
+                </div>
 
               <Separator />
 
@@ -325,10 +329,21 @@ export default function SalesPage() {
                   <span>Tax</span>
                   <span>{formatCurrency(saleDetail.taxTotal)}</span>
                 </div>
-                <div className="flex justify-between text-muted-foreground">
-                  <span>Discount</span>
-                  <span>-{formatCurrency(saleDetail.discountTotal)}</span>
-                </div>
+                {saleDetail.discountTotal > 0 && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>Discount</span>
+                      <span>-{formatCurrency(saleDetail.discountTotal)}</span>
+                    </div>
+                  )}
+                {saleDetail.loyaltyDiscountTotal > 0 && (
+                  <div className="flex justify-between text-emerald-400">
+                    <span>
+                      Loyalty ({saleDetail.loyaltyTier} {saleDetail.loyaltyDiscountPercent}%)
+                    </span>
+                    <span>-{formatCurrency(saleDetail.loyaltyDiscountTotal)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-lg font-bold pt-2"></div>
                 <div className="flex justify-between text-lg font-bold pt-2">
                   <span>Grand Total</span>
                   <span className="text-blue-400">{formatCurrency(saleDetail.grandTotal)}</span>
