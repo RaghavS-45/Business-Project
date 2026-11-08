@@ -202,7 +202,7 @@ export default function PurchaseOrdersPage() {
                   _id: string;
                   poNumber: string;
                   vendor: { _id: string; name: string };
-                  items: unknown[];
+                  items: { quantity: number; unitCost: number }[];
                   status: string;
                   totalAmount: number;
                   createdAt: string;
@@ -223,8 +223,10 @@ export default function PurchaseOrdersPage() {
                     </TableCell>
                     <TableCell>{statusBadge(po.status)}</TableCell>
                     <TableCell className="text-right text-sm font-medium">
-                      ₹{(po.totalAmount || 0).toLocaleString("en-IN")}
-                    </TableCell>
+                        ₹{po.items
+                          .reduce((sum, i) => sum + i.quantity * i.unitCost, 0)
+                          .toLocaleString("en-IN")}
+                        </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {new Date(po.createdAt).toLocaleDateString("en-IN", {
                         day: "2-digit",

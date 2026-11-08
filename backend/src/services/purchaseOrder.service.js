@@ -54,6 +54,7 @@ class PurchaseOrderService {
       const product = productMap[item.product.toString()];
       return {
         ...item,
+        unitCost: item.unitCost ?? product.costPrice,
         productName: product.name,
         productSku: product.sku,
       };
