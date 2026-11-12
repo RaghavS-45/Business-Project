@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { optionalField } from "./helpers.js";
 
 /**
  * Zod schemas for Customer route validation.
@@ -22,22 +23,13 @@ export const createCustomerSchema = z.object({
     .min(2, "Name must be at least 2 characters")
     .max(200, "Name must be at most 200 characters"),
 
-  email: z
-    .string()
-    .trim()
-    .email("Invalid email address")
-    .toLowerCase()
-    .optional()
-    .nullable()
-    .default(null),
+  email: optionalField(
+    z.string().trim().email("Invalid email address").toLowerCase()
+  ),
 
-  phone: z
-    .string()
-    .trim()
-    .regex(/^[+\d\s\-().]{7,20}$/, "Please provide a valid phone number")
-    .optional()
-    .nullable()
-    .default(null),
+  phone: optionalField(
+    z.string().trim().regex(/^[+\d\s\-().]{7,20}$/, "Please provide a valid phone number")
+  ),
 
   address: addressSchema,
 

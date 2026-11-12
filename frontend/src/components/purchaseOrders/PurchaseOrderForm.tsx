@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors";
 
 interface LineItemField {
   product: string;
@@ -83,7 +84,7 @@ export default function PurchaseOrderForm({ onSuccess }: Props) {
         toast.success("Purchase order created");
         onSuccess();
       },
-      onError: () => toast.error("Failed to create purchase order"),
+      onError: (e) => toast.error(getErrorMessage(e, "Failed to create purchase order")),
     });
   };
 

@@ -60,7 +60,7 @@ const saleItemSchema = new mongoose.Schema(
       max: 100,
       default: 0,
     },
-    // Computed: qty * unitPrice * (1 - discount/100) * (1 + tax/100)
+    // Computed in utils/pricing.js: qty × price, less item discount, less loyalty, plus tax (in paise)
     lineTotal: {
       type: Number,
       required: true,

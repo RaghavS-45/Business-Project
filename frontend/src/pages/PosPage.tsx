@@ -101,6 +101,7 @@ export default function PosPage() {
     getLoyaltyDiscountTotal,      // NEW
     getPointsToEarn,
     getGrandTotal,
+    getLineTotal,
   } = useCartStore();
 
   // Queries
@@ -456,15 +457,7 @@ export default function PosPage() {
                       </Button>
                     </div>
                     <p className="text-sm font-semibold">
-                      ₹
-                      {(
-                        item.unitPrice *
-                        item.quantity *
-                        (1 - item.discountPercent / 100) *
-                        (1 + item.taxPercent / 100)
-                      )
-                        .toFixed(2)
-                        .replace(/\.00$/, "")}
+                      ₹{getLineTotal(item.product).toFixed(2)}
                     </p>
                   </div>
                 </div>
@@ -574,13 +567,7 @@ export default function PosPage() {
                     {item.name} × {item.quantity}
                   </span>
                   <span className="font-medium">
-                    ₹
-                    {(
-                      item.unitPrice *
-                      item.quantity *
-                      (1 - item.discountPercent / 100) *
-                      (1 + item.taxPercent / 100)
-                    ).toFixed(2)}
+                    ₹{getLineTotal(item.product).toFixed(2)}
                   </span>
                 </div>
               ))}

@@ -7,6 +7,7 @@ import logger from "../config/logger.js";
 import { addJob, QUEUE_NAMES } from "../config/queue.js";
 
 import { getTier } from "../utils/loyalty.js";
+import { priceLine, pointsForPaise, toRupees, roundMoney } from "../utils/pricing.js";
 import LoyaltyTransaction from "../models/LoyaltyTransaction.js";
 
 /**
@@ -56,16 +57,16 @@ class SaleService {
   }
 
   /**
-   * Compute line total for a single item.
-   * Formula: qty * unitPrice * (1 - discount/100) * (1 + tax/100)
+   * Compute line total (in rupees) for a single item.
+   * See utils/pricing.js — discount, then loyalty, then tax, each rounded
+   * once to the nearest paisa.
    *
    * @private
    */
   _computeLineTotal(quantity, unitPrice, discountPercent, taxPercent, loyaltyPercent = 0) {
-    const afterItemDiscount = unitPrice * (1 - discountPercent / 100);
-    const afterLoyalty = afterItemDiscount * (1 - loyaltyPercent / 100);
-    const taxed = afterLoyalty * (1 + taxPercent / 100);
-    return Math.round(quantity * taxed * 100) / 100;
+    return toRupees(
+      priceLine({ quantity, unitPrice, discountPercent, taxPercent }, loyaltyPercent).total
+    );
   }
 
   /**
@@ -94,13 +95,16 @@ class SaleService {
     let sale; // declared outside try so it's visible in the post-commit block
     try {
       const saleItems = [];
-      let subtotal = 0;
-      let taxTotal = 0;
-      let discountTotal = 0;
+      // Running totals in whole paise — summed from the per-line amounts so
+      // the lines always add up to the grand total exactly.
+      let subtotalP = 0;
+      let taxP = 0;
+      let discountP = 0;
+      let loyaltyP = 0;
+      let grandP = 0;
 
       let loyaltyPercent = 0;
       let loyaltyTier = null;
-      let loyaltyDiscountTotal = 0;
 
       if (customerId) {
         const customer = await Customer.findById(customerId).session(session);
@@ -158,25 +162,22 @@ class SaleService {
         // Tax is always read from the product — never from the request body.
         const taxPercent = product.taxRate ?? 0;
 
-        const lineTotal = this._computeLineTotal(
-          item.quantity,
-          product.sellingPrice,
-          discountPercent,
-          taxPercent,
+        const line = priceLine(
+          {
+            quantity: item.quantity,
+            unitPrice: product.sellingPrice,
+            discountPercent,
+            taxPercent,
+          },
           loyaltyPercent
         );
+        const lineTotal = toRupees(line.total);
 
-        const rawLineValue = item.quantity * product.sellingPrice;
-        const discountAmount = rawLineValue * (discountPercent / 100);
-        const afterItemDiscount = rawLineValue - discountAmount;
-        const loyaltyAmount = afterItemDiscount * (loyaltyPercent / 100);
-        const taxableAmount = afterItemDiscount - loyaltyAmount;
-        const taxAmount = taxableAmount * (taxPercent / 100);
-
-        subtotal += rawLineValue;
-        discountTotal += discountAmount;
-        loyaltyDiscountTotal += loyaltyAmount;
-        taxTotal += taxAmount;
+        subtotalP += line.raw;
+        discountP += line.discount;
+        loyaltyP += line.loyalty;
+        taxP += line.tax;
+        grandP += line.total;
 
         // Snapshot product data into the line item
         saleItems.push({
@@ -192,13 +193,11 @@ class SaleService {
         });
       }
 
-      // Round totals to 2 decimal places
-      subtotal = Math.round(subtotal * 100) / 100;
-      taxTotal = Math.round(taxTotal * 100) / 100;
-      discountTotal = Math.round(discountTotal * 100) / 100;
-      loyaltyDiscountTotal = Math.round(loyaltyDiscountTotal * 100) / 100;
-      const grandTotal =
-        Math.round((subtotal - discountTotal - loyaltyDiscountTotal + taxTotal) * 100) / 100;
+      const subtotal = toRupees(subtotalP);
+      const taxTotal = toRupees(taxP);
+      const discountTotal = toRupees(discountP);
+      const loyaltyDiscountTotal = toRupees(loyaltyP);
+      const grandTotal = toRupees(grandP);
 
       // Generate invoice number
       const invoiceNumber = await this._generateInvoiceNumber();
@@ -228,11 +227,22 @@ class SaleService {
 
       // Update customer loyalty if not a walk-in
       if (customerId) {
-          const loyaltyPoints = Math.floor(grandTotal / 100);
+          const loyaltyPoints = pointsForPaise(grandP);
 
-          await Customer.findByIdAndUpdate(
-            customerId,
-            { $inc: { totalPurchases: grandTotal, loyaltyPoints } },
+          // Pipeline update so the running ₹ total is re-rounded to 2 decimals
+          // on every sale — a plain $inc lets float error pile up over time.
+          await Customer.updateOne(
+            { _id: customerId },
+            [
+              {
+                $set: {
+                  totalPurchases: {
+                    $round: [{ $add: [{ $ifNull: ["$totalPurchases", 0] }, grandTotal] }, 2],
+                  },
+                  loyaltyPoints: { $add: [{ $ifNull: ["$loyaltyPoints", 0] }, loyaltyPoints] },
+                },
+              },
+            ],
             { session }
           );
 
@@ -419,15 +429,26 @@ class SaleService {
 
         if (customer) {
           // Old sales (before the ledger existed) have no earn row, so fall back to the formula
-          const earnedPoints = earned?.points ?? Math.floor(sale.grandTotal / 100);
+          const earnedPoints =
+            earned?.points ?? pointsForPaise(Math.round(sale.grandTotal * 100));
 
           // Never deduct more than the customer currently has
           const pointsBack = Math.min(earnedPoints, customer.loyaltyPoints);
-          const purchasesBack = Math.min(sale.grandTotal, customer.totalPurchases);
+          const purchasesBack = roundMoney(Math.min(sale.grandTotal, customer.totalPurchases));
 
+          // Pipeline update: re-round to 2 decimals and never go below 0.
           await Customer.updateOne(
             { _id: customer._id },
-            { $inc: { loyaltyPoints: -pointsBack, totalPurchases: -purchasesBack } },
+            [
+              {
+                $set: {
+                  loyaltyPoints: { $max: [0, { $subtract: ["$loyaltyPoints", pointsBack] }] },
+                  totalPurchases: {
+                    $max: [0, { $round: [{ $subtract: ["$totalPurchases", purchasesBack] }, 2] }],
+                  },
+                },
+              },
+            ],
             { session }
           );
 

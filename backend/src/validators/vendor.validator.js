@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { optionalField } from "./helpers.js";
 
 /**
  * Zod schemas for Vendor route validation.
@@ -31,36 +32,26 @@ export const createVendorSchema = z.object({
     .nullable()
     .default(null),
 
-  email: z
-    .string()
-    .trim()
-    .email("Invalid email address")
-    .toLowerCase()
-    .optional()
-    .nullable()
-    .default(null),
+  email: optionalField(
+    z.string().trim().email("Invalid email address").toLowerCase()
+  ),
 
-  phone: z
-    .string()
-    .trim()
-    .regex(/^[+\d\s\-().]{7,20}$/, "Please provide a valid phone number")
-    .optional()
-    .nullable()
-    .default(null),
+  phone: optionalField(
+    z.string().trim().regex(/^[+\d\s\-().]{7,20}$/, "Please provide a valid phone number")
+  ),
 
   address: addressSchema,
 
-  gstin: z
-    .string()
-    .trim()
-    .toUpperCase()
-    .regex(
-      /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/,
-      "Please provide a valid GSTIN"
-    )
-    .optional()
-    .nullable()
-    .default(null),
+  gstin: optionalField(
+    z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(
+        /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/,
+        "Please provide a valid GSTIN"
+      )
+  ),
 
   paymentTerms: z
     .string()

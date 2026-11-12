@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { PRODUCT_CATEGORIES, PRODUCT_UNITS } from "../models/Product.js";
+import { optionalField } from "./helpers.js";
 
 /**
  * Zod schemas for Product route validation.
@@ -16,20 +17,19 @@ export const createProductSchema = z.object({
     .min(2, "Name must be at least 2 characters")
     .max(200, "Name must be at most 200 characters"),
 
-  sku: z
-    .string()
-    .trim()
-    .toUpperCase()
-    .min(3, "SKU must be at least 3 characters")
-    .max(50, "SKU must be at most 50 characters")
-    .optional(), // Auto-generated if not provided
+  // Auto-generated if blank or not provided
+  sku: optionalField(
+    z
+      .string()
+      .trim()
+      .toUpperCase()
+      .min(3, "SKU must be at least 3 characters")
+      .max(50, "SKU must be at most 50 characters")
+  ),
 
-  barcode: z
-    .string()
-    .trim()
-    .min(1)
-    .max(50, "Barcode must be at most 50 characters")
-    .optional(),
+  barcode: optionalField(
+    z.string().trim().max(50, "Barcode must be at most 50 characters")
+  ),
 
   description: z
     .string()
@@ -68,10 +68,9 @@ export const createProductSchema = z.object({
     .min(0, "Threshold cannot be negative")
     .default(10),
 
-  vendor: z
-    .string()
-    .regex(/^[a-fA-F0-9]{24}$/, "vendor must be a valid MongoDB ObjectId")
-    .optional(),
+  vendor: optionalField(
+    z.string().regex(/^[a-fA-F0-9]{24}$/, "vendor must be a valid MongoDB ObjectId")
+  ),
 });
 
 // ─── Update ──────────────────────────────────────────────

@@ -17,6 +17,8 @@ import {
 import { Plus, Search, MoreHorizontal, Pencil, Trash2, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors";
+import { formatINR } from "@/lib/pricing";
 
 interface CustomerFormData {
   name: string;
@@ -54,12 +56,12 @@ export default function CustomersPage() {
     if (editing) {
       updateCustomer.mutate({ id: editing._id as string, ...payload }, {
         onSuccess: () => { toast.success("Customer updated"); setDialogOpen(false); },
-        onError: () => toast.error("Failed to update"),
+        onError: (e) => toast.error(getErrorMessage(e, "Failed to update")),
       });
     } else {
       createCustomer.mutate(payload, {
         onSuccess: () => { toast.success("Customer created"); setDialogOpen(false); },
-        onError: () => toast.error("Failed to create"),
+        onError: (e) => toast.error(getErrorMessage(e, "Failed to create")),
       });
     }
   };
@@ -68,7 +70,7 @@ export default function CustomersPage() {
     if (confirm(`Delete "${name}"?`)) {
       deleteCustomer.mutate(id, {
         onSuccess: () => toast.success(`"${name}" deleted`),
-        onError: () => toast.error("Failed to delete"),
+        onError: (e) => toast.error(getErrorMessage(e, "Failed to delete")),
       });
     }
   };
@@ -116,7 +118,7 @@ export default function CustomersPage() {
                   <TableCell className="text-right">
                     <Badge variant="outline" className="text-[10px] text-blue-400 border-blue-500/20">{c.loyaltyPoints} pts</Badge>
                   </TableCell>
-                  <TableCell className="text-right text-sm font-medium">₹{(c.totalPurchases || 0).toLocaleString("en-IN")}</TableCell>
+                  <TableCell className="text-right text-sm font-medium">{formatINR(c.totalPurchases || 0)}</TableCell>
                   <TableCell>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>

@@ -1,3 +1,5 @@
+import { priceCart, pointsForPaise, toRupees } from "@/lib/pricing";
+
 export const TIERS = [
   { name: "Bronze",   min: 0,    discount: 0 },
   { name: "Silver",   min: 100,  discount: 5 },
@@ -20,27 +22,17 @@ type PreviewItem = {
   taxPercent?: number;
 };
 
-// Same order as the backend: item discount, then loyalty, then tax
+// Same maths as the backend (see lib/pricing.ts)
 export function previewCart(items: PreviewItem[], points = 0) {
   const loyaltyPercent = getTier(points).discount;
-  let subtotal = 0, discount = 0, loyalty = 0, tax = 0;
-
-  for (const i of items) {
-    const raw = i.quantity * i.unitPrice;
-    const d = raw * ((i.discountPercent ?? 0) / 100);
-    const l = (raw - d) * (loyaltyPercent / 100);
-    const t = (raw - d - l) * ((i.taxPercent ?? 0) / 100);
-    subtotal += raw; discount += d; loyalty += l; tax += t;
-  }
-
-  const r = (n: number) => Math.round(n * 100) / 100;
+  const t = priceCart(items, loyaltyPercent);
   return {
     loyaltyPercent,
-    subtotal: r(subtotal),
-    discount: r(discount),
-    loyalty: r(loyalty),
-    tax: r(tax),
-    grandTotal: r(subtotal - discount - loyalty + tax),
-    pointsToEarn: Math.floor(r(subtotal - discount - loyalty + tax) / 100),
+    subtotal: toRupees(t.subtotal),
+    discount: toRupees(t.discount),
+    loyalty: toRupees(t.loyalty),
+    tax: toRupees(t.tax),
+    grandTotal: toRupees(t.grandTotal),
+    pointsToEarn: pointsForPaise(t.grandTotal),
   };
 }

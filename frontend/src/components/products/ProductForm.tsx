@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors";
 
 const CATEGORIES = [
   "Electronics", "Clothing", "Food & Beverage", "Household",
@@ -80,7 +81,7 @@ export default function ProductForm({ defaultValues, onSuccess }: ProductFormPro
             toast.success("Product updated");
             onSuccess?.();
           },
-          onError: () => toast.error("Failed to update product"),
+          onError: (e) => toast.error(getErrorMessage(e, "Failed to update product")),
         }
       );
     } else {
@@ -89,7 +90,7 @@ export default function ProductForm({ defaultValues, onSuccess }: ProductFormPro
           toast.success("Product created");
           onSuccess?.();
         },
-        onError: () => toast.error("Failed to create product"),
+        onError: (e) => toast.error(getErrorMessage(e, "Failed to create product")),
       });
     }
   };

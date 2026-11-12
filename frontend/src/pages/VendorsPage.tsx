@@ -16,6 +16,7 @@ import {
 import { Plus, Search, MoreHorizontal, Pencil, Trash2, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors";
 
 interface VendorFormData {
   name: string;
@@ -53,12 +54,12 @@ const totalPages = data?.totalPages || Math.ceil(total / 15) || 1;
     if (editing) {
       updateVendor.mutate({ id: editing._id as string, ...payload }, {
         onSuccess: () => { toast.success("Vendor updated"); setDialogOpen(false); },
-        onError: () => toast.error("Failed to update"),
+        onError: (e) => toast.error(getErrorMessage(e, "Failed to update")),
       });
     } else {
       createVendor.mutate(payload, {
         onSuccess: () => { toast.success("Vendor created"); setDialogOpen(false); },
-        onError: () => toast.error("Failed to create"),
+        onError: (e) => toast.error(getErrorMessage(e, "Failed to create")),
       });
     }
   };
@@ -67,7 +68,7 @@ const totalPages = data?.totalPages || Math.ceil(total / 15) || 1;
     if (confirm(`Delete "${name}"?`)) {
       deleteVendor.mutate(id, {
         onSuccess: () => toast.success(`"${name}" deleted`),
-        onError: () => toast.error("Failed to delete"),
+        onError: (e) => toast.error(getErrorMessage(e, "Failed to delete")),
       });
     }
   };

@@ -19,6 +19,7 @@ import {
     DialogFooter,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { getErrorMessage } from "@/lib/errors";
 import { UserPlus, Trash2, ShieldCheck } from "lucide-react";
 
 const ROLES = ["ADMIN", "MANAGER", "CASHIER"] as const;
@@ -60,7 +61,7 @@ export default function UsersPage() {
             setDialogOpen(false);
             setForm(emptyForm);
         },
-        onError: (e: any) => toast.error(e.response?.data?.message ?? "Failed to create user"),
+        onError: (e) => toast.error(getErrorMessage(e, "Failed to create user")),
     });
 
     const updateRoleMutation = useMutation({
@@ -70,12 +71,14 @@ export default function UsersPage() {
             qc.invalidateQueries({ queryKey: ["users"] });
             toast.success("Role updated");
         },
+        onError: (e) => toast.error(getErrorMessage(e, "Failed to update role")),
     });
 
     const toggleActiveMutation = useMutation({
         mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
             api.patch(`/users/${id}`, { isActive }),
         onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
+        onError: (e) => toast.error(getErrorMessage(e, "Failed to update status")),
     });
 
     const deleteMutation = useMutation({
@@ -84,7 +87,7 @@ export default function UsersPage() {
             qc.invalidateQueries({ queryKey: ["users"] });
             toast.success("User deleted");
         },
-        onError: (e: any) => toast.error(e.response?.data?.message ?? "Failed to delete user"),
+        onError: (e) => toast.error(getErrorMessage(e, "Failed to delete user")),
     });
 
     return (

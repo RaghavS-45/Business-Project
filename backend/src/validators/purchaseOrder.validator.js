@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { optionalField, dateString } from "./helpers.js";
 
 /**
  * Zod schemas for PurchaseOrder route validation.
@@ -36,12 +37,7 @@ export const createPurchaseOrderSchema = z.object({
     .optional()
     .default(""),
 
-  expectedDelivery: z
-    .string()
-    .datetime({ offset: true, message: "Invalid date format" })
-    .optional()
-    .nullable()
-    .default(null),
+  expectedDelivery: optionalField(dateString),
 });
 
 // ─── Update (partial, but items still validated if present) ──
@@ -52,11 +48,11 @@ export const updatePurchaseOrderSchema = z.object({
     .max(1000, "Notes must be at most 1000 characters")
     .optional(),
 
-  expectedDelivery: z
-    .string()
-    .datetime({ offset: true, message: "Invalid date format" })
-    .optional()
-    .nullable(),
+  // null clears the date; blank / omitted leaves it unchanged
+  expectedDelivery: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.union([dateString, z.null()]).optional()
+  ),
 });
 
 // ─── Status transition ────────────────────────────────────
