@@ -5,6 +5,23 @@ import { useCheckout, useDebouncedValue } from "@/hooks/usePos";
 import { useStoreSettings } from "@/hooks/useSettings";
 import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useCartStore, type PaymentMethod } from "@/stores/cartStore";
+import CartLine from "@/components/pos/CartLine";
+import { LEVEL_LABELS, type PriceLevel, type PricedProduct } from "@/lib/unitPricing";
+
+type PosProduct = {
+  _id: string;
+  name: string;
+  sku: string;
+  sellingPrice: number;
+  costPrice: number;
+  stock: number;
+  unit?: string;
+  taxRate?: number;
+  images?: Array<{ url: string }>;
+  packs?: PricedProduct["packs"];
+  levelPrices?: PricedProduct["levelPrices"];
+  priceSlabs?: PricedProduct["priceSlabs"];
+};
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -38,9 +55,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Textarea } from "@/components/ui/textarea";
 import {
   Search,
-  Plus,
-  Minus,
-  X,
   ShoppingCart,
   CreditCard,
   Banknote,
@@ -94,8 +108,6 @@ export default function PosPage() {
     paymentMethod,
     notes,
     addItem,
-    removeItem,
-    updateQuantity,
     setCustomer,
     setPaymentMethod,
     setNotes,
@@ -109,6 +121,7 @@ export default function PosPage() {
     getGrandTotal,
     getLineTotal,
     getTaxableTotal,
+    priceLevel,
     taxInclusive,
     setTaxInclusive,
   } = useCartStore();
@@ -135,16 +148,7 @@ export default function PosPage() {
   
 
   const handleAddToCart = useCallback(
-    (product: {
-      _id: string;
-      name: string;
-      sku: string;
-      sellingPrice: number;
-      costPrice: number;
-      stock: number;
-      taxRate?: number;
-      images?: Array<{ url: string }>;
-    }) => {
+    (product: PosProduct) => {
       if (product.stock <= 0) {
         toast.error("Out of stock");
         return;
@@ -153,11 +157,17 @@ export default function PosPage() {
         product: product._id,
         name: product.name,
         sku: product.sku,
-        unitPrice: product.sellingPrice,
         costPrice: product.costPrice,
         stock: product.stock,
         taxPercent: product.taxRate ?? 0,
         image: product.images?.[0]?.url,
+        pricing: {
+          unit: product.unit ?? "pcs",
+          sellingPrice: product.sellingPrice,
+          packs: product.packs ?? [],
+          levelPrices: product.levelPrices,
+          priceSlabs: product.priceSlabs ?? [],
+        },
       });
       toast.success(`Added ${product.name}`, { duration: 1500 });
     },
@@ -169,6 +179,7 @@ export default function PosPage() {
       items: cartItems.map((item) => ({
         product: item.product,
         quantity: item.quantity,
+        unit: item.unit,
         discountPercent: item.discountPercent || undefined,
         taxPercent: item.taxPercent || undefined,
       })),
@@ -425,11 +436,11 @@ export default function PosPage() {
                       )}
                     </CommandItem>
                     {customers.map(
-                      (c: { _id: string; name: string; phone?: string; loyaltyPoints?: number }) => (
+                      (c: { _id: string; name: string; phone?: string; loyaltyPoints?: number; priceLevel?: PriceLevel }) => (
                         <CommandItem
                           key={c._id}
                           onSelect={() => {
-            setCustomer(c._id, c.name, c.loyaltyPoints ?? 0);
+            setCustomer(c._id, c.name, c.loyaltyPoints ?? 0, c.priceLevel ?? "RETAIL");
             setCustomerOpen(false);
           }}
                         >
@@ -450,6 +461,11 @@ export default function PosPage() {
               </Command>
             </PopoverContent>
           </Popover>
+          {selectedCustomer && priceLevel !== "RETAIL" && (
+            <p className="mt-1.5 px-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-400">
+              {LEVEL_LABELS[priceLevel]} prices applied
+            </p>
+          )}
           {customerInfo && (owesNow > 0 || limit !== null) && (
             <p className="mt-1.5 px-1 text-[11px] text-muted-foreground">
               Owes <span className={owesNow > 0 ? "font-medium text-amber-600 dark:text-amber-400" : ""}>{formatINR(owesNow)}</span>
@@ -469,72 +485,7 @@ export default function PosPage() {
           ) : (
             <div className="space-y-3 pb-4">
               {cartItems.map((item) => (
-                <div
-                  key={item.product}
-                  className="group rounded-lg border border-border/40 bg-muted/10 p-3 transition-colors hover:border-border/60"
-                >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate">
-                        {item.name}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground font-mono">
-                        {formatPrice(item.unitPrice)} × {item.quantity}
-                        {item.taxPercent > 0 && ` · GST ${item.taxPercent}%`}
-                      </p>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-opacity"
-                      onClick={() => removeItem(item.product)}
-                    >
-                      <X className="h-3 w-3" />
-                    </Button>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() =>
-                          updateQuantity(item.product, item.quantity - 1)
-                        }
-                        disabled={item.quantity <= 1}
-                      >
-                        <Minus className="h-3 w-3" />
-                      </Button>
-                      <Input
-                        type="number"
-                        value={item.quantity}
-                        onChange={(e) =>
-                          updateQuantity(
-                            item.product,
-                            parseInt(e.target.value) || 1
-                          )
-                        }
-                        className="h-7 w-12 text-center text-sm px-1"
-                        min={1}
-                        max={item.stock}
-                      />
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() =>
-                          updateQuantity(item.product, item.quantity + 1)
-                        }
-                        disabled={item.quantity >= item.stock}
-                      >
-                        <Plus className="h-3 w-3" />
-                      </Button>
-                    </div>
-                    <p className="text-sm font-semibold">
-                      {formatINR(getLineTotal(item.product))}
-                    </p>
-                  </div>
-                </div>
+                <CartLine key={item.key} item={item} />
               ))}
             </div>
           )}
@@ -651,12 +602,12 @@ export default function PosPage() {
             {/* Order summary */}
             <div className="rounded-lg border border-border/50 bg-muted/10 p-3 space-y-2 max-h-[200px] overflow-y-auto">
               {cartItems.map((item) => (
-                <div key={item.product} className="flex justify-between text-sm">
+                <div key={item.key} className="flex justify-between text-sm">
                   <span className="text-muted-foreground">
-                    {item.name} × {item.quantity}
+                    {item.name} × {item.quantity} {item.unit}
                   </span>
                   <span className="font-medium">
-                    {formatINR(getLineTotal(item.product))}
+                    {formatINR(getLineTotal(item.key))}
                   </span>
                 </div>
               ))}

@@ -2,6 +2,17 @@ import { z } from "zod";
 import { PRODUCT_CATEGORIES, PRODUCT_UNITS } from "../models/Product.js";
 import { optionalField } from "./helpers.js";
 import { HSN_REGEX } from "../utils/gst.js";
+import { DECIMAL_UNITS } from "../utils/unitPricing.js";
+
+const threeDecimals = (v) => Math.round(v * 1000) / 1000 === v;
+
+/** Arrays may arrive as JSON strings when the form is sent as multipart. */
+const jsonArray = (schema) => z.preprocess((v) => (typeof v === "string" ? JSON.parse(v) : v), schema);
+
+const nullableMoney = z.preprocess(
+  (v) => (v === "" || v === undefined ? null : v),
+  z.coerce.number().min(0, "Price cannot be negative").nullable()
+);
 
 /**
  * Zod schemas for Product route validation.
@@ -11,7 +22,7 @@ import { HSN_REGEX } from "../utils/gst.js";
  */
 
 // ─── Create ──────────────────────────────────────────────
-export const createProductSchema = z.object({
+const productFields = z.object({
   name: z
     .string({ required_error: "Product name is required" })
     .trim()
@@ -57,17 +68,53 @@ export const createProductSchema = z.object({
     .number({ required_error: "Selling price is required" })
     .min(0, "Selling price cannot be negative"),
 
+  // Whole numbers, except for loose units (kg, ltr, ...) — checked below
   stock: z.coerce
     .number()
-    .int("Stock must be a whole number")
     .min(0, "Stock cannot be negative")
+    .refine(threeDecimals, "Stock can have at most 3 decimals")
     .default(0),
 
   lowStockThreshold: z.coerce
     .number()
-    .int("Low stock threshold must be a whole number")
     .min(0, "Threshold cannot be negative")
+    .refine(threeDecimals, "Threshold can have at most 3 decimals")
     .default(10),
+
+  // Other selling units: [{ name: "carton", size: 12, price?: 5400 }]
+  packs: jsonArray(
+    z.array(
+      z.object({
+        name: z.string().trim().toLowerCase().min(1, "Pack name is required").max(30),
+        size: z.coerce.number().positive("Pack size must be more than 0").refine(threeDecimals, "Pack size can have at most 3 decimals"),
+        price: z.preprocess(
+          (v) => (v === "" || v === undefined ? null : v),
+          z.coerce.number().min(0, "Pack price cannot be negative").nullable()
+        ),
+      })
+    ).max(10, "At most 10 pack sizes")
+  ).optional(),
+
+  // Price per base unit for Wholesale / Distributor customers (null = selling price)
+  levelPrices: z
+    .preprocess(
+      (v) => (typeof v === "string" ? JSON.parse(v) : v),
+      z.object({
+        wholesale: nullableMoney,
+        distributor: nullableMoney,
+      })
+    )
+    .optional(),
+
+  // Bulk prices: [{ minQty: 10, price: 470 }] per base unit
+  priceSlabs: jsonArray(
+    z.array(
+      z.object({
+        minQty: z.coerce.number().positive("Slab quantity must be more than 0"),
+        price: z.coerce.number().min(0, "Slab price cannot be negative"),
+      })
+    ).max(10, "At most 10 price slabs")
+  ).optional(),
 
   // GST rate in percent. Any value 0–100 is accepted so new slabs need no code change.
   taxRate: z.coerce
@@ -88,9 +135,38 @@ export const createProductSchema = z.object({
   ),
 });
 
+/** Cross-field checks: whole-number stock for counted units, unique packs/slabs. */
+const checkProduct = (data, ctx) => {
+  const unit = data.unit;
+  if (unit && !DECIMAL_UNITS.includes(unit)) {
+    for (const key of ["stock", "lowStockThreshold"]) {
+      if (data[key] !== undefined && !Number.isInteger(data[key])) {
+        ctx.addIssue({ code: "custom", path: [key], message: `${unit} is counted in whole numbers` });
+      }
+    }
+  }
+  if (data.packs) {
+    const names = data.packs.map((p) => p.name);
+    if (new Set(names).size !== names.length) {
+      ctx.addIssue({ code: "custom", path: ["packs"], message: "Each pack name can only be used once" });
+    }
+    if (unit && names.includes(unit)) {
+      ctx.addIssue({ code: "custom", path: ["packs"], message: `A pack can't have the same name as the base unit (${unit})` });
+    }
+  }
+  if (data.priceSlabs) {
+    const qtys = data.priceSlabs.map((s) => s.minQty);
+    if (new Set(qtys).size !== qtys.length) {
+      ctx.addIssue({ code: "custom", path: ["priceSlabs"], message: "Each slab needs a different quantity" });
+    }
+  }
+};
+
+export const createProductSchema = productFields.superRefine(checkProduct);
+
 // ─── Update ──────────────────────────────────────────────
 // All fields optional — only provided fields are updated
-export const updateProductSchema = createProductSchema.partial();
+export const updateProductSchema = productFields.partial().superRefine(checkProduct);
 
 // ─── List / Query ────────────────────────────────────────
 export const productQuerySchema = z.object({

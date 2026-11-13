@@ -9,6 +9,7 @@ import logger from "../config/logger.js";
 import { addJob, QUEUE_NAMES } from "../config/queue.js";
 import { toPaise, toRupees, pointsForPaise } from "../utils/pricing.js";
 import { nextDocumentNumber, resyncCounter } from "../utils/documentNumber.js";
+import { allowsDecimal, roundQty } from "../utils/unitPricing.js";
 
 /**
  * Returns & credit notes.
@@ -121,13 +122,28 @@ class ReturnService {
           throw ApiError.badRequest(`Cannot refund a sale with status: ${sale.status}`);
         }
 
-        // Merge duplicate product rows in the request
-        const requested = new Map();
+        // Which invoice line each request row refers to: by `line` index, or
+        // by product when that product appears on only one line.
+        // Rows for the same line are merged.
+        const requested = new Map(); // lineIndex → { quantity, restock }
         for (const it of items) {
-          const key = String(it.product);
-          const prev = requested.get(key);
-          requested.set(key, {
-            quantity: (prev?.quantity ?? 0) + it.quantity,
+          let index = it.line;
+          if (index === undefined || index === null) {
+            const matches = sale.items
+              .map((l, i) => (String(l.product) === String(it.product) ? i : -1))
+              .filter((i) => i >= 0);
+            if (matches.length === 0) {
+              throw ApiError.badRequest(`Product ${it.product} is not on invoice ${sale.invoiceNumber}`);
+            }
+            if (matches.length > 1) {
+              throw ApiError.badRequest("That product is on several lines of the invoice; say which line to return");
+            }
+            index = matches[0];
+          }
+          if (!sale.items[index]) throw ApiError.badRequest(`Invoice ${sale.invoiceNumber} has no line ${index + 1}`);
+          const prev = requested.get(index);
+          requested.set(index, {
+            quantity: roundQty((prev?.quantity ?? 0) + it.quantity),
             restock: it.restock ?? prev?.restock ?? true,
           });
         }
@@ -135,12 +151,18 @@ class ReturnService {
         const cnItems = [];
         let subtotalP = 0, taxableP = 0, cgstP = 0, sgstP = 0, igstP = 0;
 
-        for (const [productId, req] of requested) {
-          const line = sale.items.find((i) => String(i.product) === productId);
-          if (!line) throw ApiError.badRequest(`Product ${productId} is not on invoice ${sale.invoiceNumber}`);
+        for (const [index, req] of requested) {
+          const line = sale.items[index];
+          const unitSize = line.unitSize ?? 1;
+          const unitName = line.unit || "";
+          // Loose quantities only where the line was sold loose (kg, ltr in the base unit)
+          const looseOk = unitSize === 1 && allowsDecimal(unitName);
+          if (!looseOk && !Number.isInteger(req.quantity)) {
+            throw ApiError.badRequest(`"${line.name}" was sold in whole ${unitName || "units"}; return a whole number`);
+          }
 
           const already = line.returnedQuantity ?? 0;
-          const left = line.quantity - already;
+          const left = roundQty(line.quantity - already);
           if (req.quantity > left) {
             throw ApiError.badRequest(
               `Can't return ${req.quantity} × "${line.name}": only ${left} of ${line.quantity} not yet returned`
@@ -160,7 +182,11 @@ class ReturnService {
             name: line.name,
             sku: line.sku,
             hsnCode: line.hsnCode || "",
+            line: index,
             quantity: req.quantity,
+            unit: unitName,
+            unitSize,
+            baseUnit: line.baseUnit || "",
             unitPrice: line.unitPrice,
             discountPercent: line.discountPercent ?? 0,
             taxPercent: line.taxPercent ?? 0,
@@ -177,17 +203,23 @@ class ReturnService {
           sgstP += sgst;
           igstP += igst;
 
-          line.returnedQuantity = already + req.quantity;
+          line.returnedQuantity = roundQty(already + req.quantity);
 
           if (req.restock) {
-            await Product.updateOne({ _id: line.product }, { $inc: { stock: req.quantity } }, { session });
+            // Back into stock in base units (2 cartons of 12 → 24 pcs)
+            const baseQty = roundQty(req.quantity * unitSize);
+            await Product.updateOne(
+              { _id: line.product },
+              [{ $set: { stock: { $round: [{ $add: ["$stock", baseQty] }, 3] } } }],
+              { session }
+            );
           }
         }
 
         const totalP = taxableP + cgstP + sgstP + igstP;
         const returnedBeforeP = toPaise(sale.returnedTotal ?? 0);
         const grandP = toPaise(sale.grandTotal);
-        const everythingReturned = sale.items.every((i) => (i.returnedQuantity ?? 0) >= i.quantity);
+        const everythingReturned = sale.items.every((i) => roundQty(i.returnedQuantity ?? 0) >= i.quantity);
 
         // An unpaid invoice is reduced first; only the rest is paid back
         const dueBeforeP = toPaise(sale.balanceDue ?? 0);
@@ -316,8 +348,8 @@ class ReturnService {
       throw ApiError.badRequest(`Cannot refund a sale with status: ${sale.status}`);
     }
     const items = sale.items
-      .filter((i) => i.quantity - (i.returnedQuantity ?? 0) > 0)
-      .map((i) => ({ product: i.product, quantity: i.quantity - (i.returnedQuantity ?? 0), restock: true }));
+      .map((i, line) => ({ line, quantity: roundQty(i.quantity - (i.returnedQuantity ?? 0)), restock: true }))
+      .filter((i) => i.quantity > 0);
     return this.createReturn(saleId, { items, reason }, userId, { noteLabel: "REFUND" });
   }
 

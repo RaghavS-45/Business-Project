@@ -6,12 +6,20 @@ const objectId = (label) => z.string().regex(/^[a-fA-F0-9]{24}$/, `${label} must
 export const createReturnSchema = z.object({
   items: z
     .array(
-      z.object({
-        product: objectId("product"),
-        quantity: z.coerce.number().int("Quantity must be a whole number").positive("Quantity must be at least 1"),
+      z
+        .object({
+        // Invoice line (0-based). Or give the product if it's on one line only.
+        line: z.coerce.number().int().min(0).optional(),
+        product: objectId("product").optional(),
+        // Whole numbers unless the line was sold loose (kg, ltr) — checked per line
+        quantity: z.coerce
+          .number()
+          .positive("Quantity must be more than 0")
+          .refine((v) => Math.round(v * 1000) / 1000 === v, "Quantity can have at most 3 decimals"),
         // false for damaged goods: don't put them back in stock
         restock: z.boolean().optional().default(true),
       })
+        .refine((v) => v.line !== undefined || v.product !== undefined, "Give the invoice line or the product")
     )
     .min(1, "Choose at least one item to return")
     .max(50),

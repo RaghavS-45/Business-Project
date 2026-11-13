@@ -16,7 +16,11 @@ const creditNoteItemSchema = new mongoose.Schema(
     name: { type: String, required: true },
     sku: { type: String, default: "" },
     hsnCode: { type: String, default: "" },
-    quantity: { type: Number, required: true, min: 1 },
+    line: { type: Number, default: null }, // index of the line on the invoice
+    quantity: { type: Number, required: true, min: 0.001 },
+    unit: { type: String, default: "" },
+    unitSize: { type: Number, default: 1 },
+    baseUnit: { type: String, default: "" },
     unitPrice: { type: Number, required: true, min: 0 },
     discountPercent: { type: Number, default: 0 },
     taxPercent: { type: Number, default: 0 },

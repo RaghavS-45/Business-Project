@@ -65,7 +65,7 @@ export function useSaleReturns(saleId: string | undefined) {
 
 export interface ReturnInput {
   saleId: string;
-  items: Array<{ product: string; quantity: number; restock: boolean }>;
+  items: Array<{ line?: number; product?: string; quantity: number; restock: boolean }>;
   reason: string;
   refundMethod?: string;
 }

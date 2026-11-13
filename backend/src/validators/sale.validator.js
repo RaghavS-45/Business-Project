@@ -13,10 +13,13 @@ const cartItemSchema = z.object({
   product: z
     .string({ required_error: "Product ID is required" })
     .regex(/^[a-fA-F0-9]{24}$/, "product must be a valid MongoDB ObjectId"),
+  // Whole numbers, or up to 3 decimals for loose units (checked per product)
   quantity: z.coerce
     .number({ required_error: "Quantity is required" })
-    .int("Quantity must be a whole number")
-    .min(1, "Quantity must be at least 1"),
+    .positive("Quantity must be more than 0")
+    .refine((v) => Math.round(v * 1000) / 1000 === v, "Quantity can have at most 3 decimals"),
+  // Selling unit: the product's base unit (default) or one of its packs
+  unit: z.string().trim().toLowerCase().max(30).optional(),
   discountPercent: z.coerce
     .number()
     .min(0, "Discount cannot be negative")

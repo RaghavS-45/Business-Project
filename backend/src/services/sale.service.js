@@ -13,6 +13,7 @@ import { nextDocumentNumber, resyncCounter } from "../utils/documentNumber.js";
 import settingsService from "./settings.service.js";
 import returnService from "./return.service.js";
 import { splitTax, stateInfo, stateFromGstin } from "../utils/gst.js";
+import { sellingUnit, validQuantity, allowsDecimal, resolveLine } from "../utils/unitPricing.js";
 
 /**
  * Sale Service — Checkout Pipeline with Mongoose Transactions
@@ -225,34 +226,43 @@ class SaleService {
             );
           }
 
-          // Atomically decrement stock with optimistic lock
-          // The $gte guard ensures stock never goes negative
-          const product = await Product.findOneAndUpdate(
-            {
-              _id: item.product,
-              isActive: true,
-              stock: { $gte: item.quantity }, // Optimistic concurrency guard
-            },
-            {
-              $inc: { stock: -item.quantity },
-            },
-            {
-              new: true, // Return the updated document
-              session,
-            }
-          );
+          // ── Product, selling unit and price ──────────────
+          const product = await Product.findById(item.product).session(session);
+          if (!product) throw ApiError.notFound(`Product not found: ${item.product}`);
+          if (!product.isActive) throw ApiError.badRequest(`Product is inactive: ${product.name}`);
 
-          if (!product) {
-            // Check if the product exists at all for a better error message
-            const exists = await Product.findById(item.product).session(session);
-            if (!exists) {
-              throw ApiError.notFound(`Product not found: ${item.product}`);
-            }
-            if (!exists.isActive) {
-              throw ApiError.badRequest(`Product is inactive: ${exists.name}`);
-            }
+          const unit = sellingUnit(product, item.unit);
+          if (!unit) {
+            throw ApiError.badRequest(`"${product.name}" isn't sold by the ${item.unit}`);
+          }
+          if (!validQuantity(product, unit, item.quantity)) {
             throw ApiError.badRequest(
-              `Insufficient stock for "${exists.name}": requested ${item.quantity}, available ${exists.stock}`
+              `Quantity ${item.quantity} isn't valid for "${product.name}": ` +
+                (unit.isBase && allowsDecimal(product.unit)
+                  ? "use at most 3 decimals"
+                  : `${unit.name} is sold in whole numbers`)
+            );
+          }
+          // Price is always worked out here (customer level, bulk slabs,
+          // pack price) — never taken from the request.
+          const resolved = resolveLine(product, {
+            unit: unit.name,
+            quantity: item.quantity,
+            level: customer?.priceLevel ?? "RETAIL",
+          });
+
+          // Take the stock (in base units). The $gte guard means it can never
+          // go negative, even with concurrent checkouts; $round keeps loose
+          // quantities (kg, ltr) free of float drift.
+          const taken = await Product.updateOne(
+            { _id: product._id, isActive: true, stock: { $gte: resolved.baseQty } },
+            [{ $set: { stock: { $round: [{ $subtract: ["$stock", resolved.baseQty] }, 3] } } }],
+            { session }
+          );
+          if (taken.matchedCount === 0) {
+            throw ApiError.badRequest(
+              `Insufficient stock for "${product.name}": requested ${resolved.baseQty} ${product.unit}, ` +
+                `available ${product.stock} ${product.unit}`
             );
           }
 
@@ -262,7 +272,7 @@ class SaleService {
           const line = priceLine(
             {
               quantity: item.quantity,
-              unitPrice: product.sellingPrice,
+              unitPrice: resolved.unitPrice,
               discountPercent,
               taxPercent,
             },
@@ -288,8 +298,13 @@ class SaleService {
             name: product.name,
             sku: product.sku,
             quantity: item.quantity,
-            unitPrice: product.sellingPrice,
-            costPrice: product.costPrice,
+            unit: resolved.unitName,
+            unitSize: resolved.unitSize,
+            baseUnit: product.unit,
+            baseQuantity: resolved.baseQty,
+            priceSource: resolved.priceSource,
+            unitPrice: resolved.unitPrice,
+            costPrice: toRupees(Math.round(toPaise(product.costPrice) * resolved.unitSize)),
             discountPercent,
             taxPercent,
             hsnCode: product.hsnCode || "",

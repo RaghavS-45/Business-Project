@@ -33,11 +33,17 @@ const saleItemSchema = new mongoose.Schema(
     // Snapshots at time of sale — immutable after creation
     name: { type: String, required: true },
     sku: { type: String, required: true },
+    // In the selling unit below (e.g. 2 cartons, or 2.5 kg)
     quantity: {
       type: Number,
       required: true,
-      min: [1, "Quantity must be at least 1"],
+      min: [0.001, "Quantity must be more than 0"],
     },
+    unit: { type: String, default: "" },        // selling unit, e.g. "carton" / "kg"
+    unitSize: { type: Number, default: 1 },     // base units per selling unit
+    baseUnit: { type: String, default: "" },    // product's stock unit, e.g. "pcs"
+    baseQuantity: { type: Number },             // quantity × unitSize (stock moved)
+    priceSource: { type: String, default: "" }, // "Wholesale", "Bulk 10+ pcs", "carton price", ...
     unitPrice: {
       type: Number,
       required: true,

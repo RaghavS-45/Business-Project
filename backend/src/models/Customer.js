@@ -73,6 +73,14 @@ const customerSchema = new mongoose.Schema(
     },
 
     // ─── Loyalty / Analytics (Phase 5 hooks) ─────────────
+    // Which product price this customer gets: RETAIL (selling price),
+    // WHOLESALE or DISTRIBUTOR (products' level prices, if set)
+    priceLevel: {
+      type: String,
+      enum: ["RETAIL", "WHOLESALE", "DISTRIBUTOR"],
+      default: "RETAIL",
+    },
+
     // ─── Credit (wholesale) ─────────────────────────────
     // Max unpaid amount allowed. null = no limit, 0 = cash only.
     creditLimit: {

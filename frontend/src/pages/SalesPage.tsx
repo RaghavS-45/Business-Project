@@ -304,12 +304,14 @@ export default function SalesPage() {
                 <p className="text-xs font-semibold text-muted-foreground mb-2">Line Items</p>
                 <div className="space-y-2">
                   {saleDetail.items?.map(
-                    (item: { name: string; sku: string; quantity: number; returnedQuantity?: number; unitPrice: number; lineTotal: number; hsnCode?: string; taxPercent?: number }, i: number) => (
+                    (item: { name: string; sku: string; quantity: number; returnedQuantity?: number; unitPrice: number; lineTotal: number; hsnCode?: string; taxPercent?: number; unit?: string; unitSize?: number; baseUnit?: string; priceSource?: string }, i: number) => (
                       <div key={i} className="flex justify-between text-sm">
                         <div>
                           <p className="font-medium">{item.name}</p>
                           <p className="text-xs text-muted-foreground">
-                            {item.sku} — {formatPrice(item.unitPrice)} × {item.quantity}
+                            {item.sku} — {formatPrice(item.unitPrice)}{item.unit ? `/${item.unit}` : ""} × {item.quantity}{item.unit ? ` ${item.unit}` : ""}
+                            {item.unitSize && item.unitSize !== 1 ? ` (${item.unitSize} ${item.baseUnit ?? ""} each)` : ""}
+                            {item.priceSource && item.priceSource !== "Retail" && ` · ${item.priceSource}`}
                             {item.hsnCode && ` · HSN ${item.hsnCode}`}
                             {item.taxPercent ? ` · GST ${item.taxPercent}%` : ""}
                           </p>

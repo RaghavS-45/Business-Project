@@ -18,6 +18,7 @@ import { useCreateReturn } from "@/hooks/useSales";
 import { formatINR, formatPrice, toPaise, toRupees } from "@/lib/pricing";
 import { getErrorMessage } from "@/lib/errors";
 import { cn } from "@/lib/utils";
+import { allowsDecimal, roundQty } from "@/lib/unitPricing";
 
 export interface ReturnableSale {
   _id: string;
@@ -30,6 +31,8 @@ export interface ReturnableSale {
     sku: string;
     quantity: number;
     returnedQuantity?: number;
+    unit?: string;
+    unitSize?: number;
     unitPrice: number;
     taxableValue?: number;
     cgst?: number;
@@ -72,24 +75,34 @@ export default function ReturnDialog({
   onOpenChange: (open: boolean) => void;
 }) {
   const createReturn = useCreateReturn();
-  const lines = sale.items.map((i) => ({ ...i, left: i.quantity - (i.returnedQuantity ?? 0) }));
+  // Keyed by invoice line, so pieces and cartons of one product stay separate
+  const lines = sale.items.map((i, index) => ({
+    ...i,
+    lineKey: String(index),
+    index,
+    left: roundQty(i.quantity - (i.returnedQuantity ?? 0)),
+    loose: (i.unitSize ?? 1) === 1 && allowsDecimal(i.unit ?? ""),
+  }));
 
   const [qty, setQty] = useState<Record<string, number>>({});
   const [damaged, setDamaged] = useState<Record<string, boolean>>({});
   const [reason, setReason] = useState("");
   const [method, setMethod] = useState(sale.paymentMethod);
 
-  const setLineQty = (product: string, value: number, max: number) =>
-    setQty((q) => ({ ...q, [product]: Math.max(0, Math.min(max, Number.isFinite(value) ? value : 0)) }));
+  const setLineQty = (key: string, value: number, max: number, loose = false) =>
+    setQty((q) => ({
+      ...q,
+      [key]: Math.max(0, Math.min(max, Number.isFinite(value) ? (loose ? roundQty(value) : Math.round(value)) : 0)),
+    }));
 
   const selectAll = () =>
-    setQty(Object.fromEntries(lines.filter((l) => l.left > 0).map((l) => [l.product, l.left])));
+    setQty(Object.fromEntries(lines.filter((l) => l.left > 0).map((l) => [l.lineKey, l.left])));
 
   const refundPaise = useMemo(
-    () => lines.reduce((sum, l) => sum + refundForLine(l, qty[l.product] ?? 0), 0),
+    () => lines.reduce((sum, l) => sum + refundForLine(l, qty[l.lineKey] ?? 0), 0),
     [lines, qty]
   );
-  const chosen = lines.filter((l) => (qty[l.product] ?? 0) > 0);
+  const chosen = lines.filter((l) => (qty[l.lineKey] ?? 0) > 0);
   // Unpaid balance on the invoice is reduced first (server does the same)
   const dueP = toPaise(sale.balanceDue ?? 0);
 
@@ -105,9 +118,9 @@ export default function ReturnDialog({
       {
         saleId: sale._id,
         items: chosen.map((l) => ({
-          product: l.product,
-          quantity: qty[l.product],
-          restock: !damaged[l.product],
+          line: l.index,
+          quantity: qty[l.lineKey],
+          restock: !damaged[l.lineKey],
         })),
         reason: reason.trim(),
         refundMethod: method,
@@ -148,10 +161,10 @@ export default function ReturnDialog({
             </Button>
           </div>
           {lines.map((l) => {
-            const q = qty[l.product] ?? 0;
+            const q = qty[l.lineKey] ?? 0;
             return (
               <div
-                key={l.product}
+                key={l.lineKey}
                 className={cn(
                   "rounded-lg border p-3 transition-colors",
                   q > 0 ? "border-primary/40 bg-primary/5" : "border-border/60",
@@ -162,7 +175,7 @@ export default function ReturnDialog({
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate">{l.name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {formatPrice(l.unitPrice)} · sold {l.quantity}
+                      {formatPrice(l.unitPrice)}/{l.unit || "unit"} · sold {l.quantity} {l.unit}
                       {l.returnedQuantity ? ` · ${l.returnedQuantity} already returned` : ""}
                     </p>
                   </div>
@@ -173,7 +186,7 @@ export default function ReturnDialog({
                         variant="outline"
                         size="icon"
                         className="h-7 w-7"
-                        onClick={() => setLineQty(l.product, q - 1, l.left)}
+                        onClick={() => setLineQty(l.lineKey, q - 1, l.left, l.loose)}
                         disabled={q <= 0}
                         aria-label={`Return one fewer ${l.name}`}
                       >
@@ -181,11 +194,12 @@ export default function ReturnDialog({
                       </Button>
                       <Input
                         type="number"
-                        inputMode="numeric"
+                        inputMode={l.loose ? "decimal" : "numeric"}
+                        step={l.loose ? "0.001" : "1"}
                         value={q}
                         min={0}
                         max={l.left}
-                        onChange={(e) => setLineQty(l.product, parseInt(e.target.value, 10), l.left)}
+                        onChange={(e) => setLineQty(l.lineKey, Number(e.target.value), l.left, l.loose)}
                         className="h-7 w-14 px-1 text-center text-sm"
                         aria-label={`Quantity of ${l.name} to return`}
                       />
@@ -194,7 +208,7 @@ export default function ReturnDialog({
                         variant="outline"
                         size="icon"
                         className="h-7 w-7"
-                        onClick={() => setLineQty(l.product, q + 1, l.left)}
+                        onClick={() => setLineQty(l.lineKey, q + 1, l.left, l.loose)}
                         disabled={q >= l.left}
                         aria-label={`Return one more ${l.name}`}
                       >
@@ -211,8 +225,8 @@ export default function ReturnDialog({
                       <input
                         type="checkbox"
                         className="h-3.5 w-3.5 accent-[var(--primary)]"
-                        checked={!!damaged[l.product]}
-                        onChange={(e) => setDamaged((d) => ({ ...d, [l.product]: e.target.checked }))}
+                        checked={!!damaged[l.lineKey]}
+                        onChange={(e) => setDamaged((d) => ({ ...d, [l.lineKey]: e.target.checked }))}
                       />
                       Damaged — don't put back in stock
                     </label>

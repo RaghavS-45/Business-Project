@@ -197,9 +197,9 @@ function draw(doc, sale, opts) {
   // ─── Items table ─────────────────────────────────────────
   const cols = [
     { key: "n", label: "#", w: 18, align: "left" },
-    { key: "name", label: "Item", w: 124, align: "left" },
+    { key: "name", label: "Item", w: 106, align: "left" },
     { key: "hsn", label: "HSN", w: 44, align: "left" },
-    { key: "qty", label: "Qty", w: 30, align: "right" },
+    { key: "qty", label: "Qty", w: 48, align: "right" },
     { key: "rate", label: "Rate", w: 54, align: "right" },
     { key: "disc", label: "Disc", w: 44, align: "right" },
     { key: "taxable", label: "Taxable", w: 62, align: "right" },
@@ -232,9 +232,14 @@ function draw(doc, sale, opts) {
     y = drawRow(
       {
         n: i + 1,
-        name: it.name,
+        // "Basmati Rice (bag of 25 kg)"
+        name:
+          it.unitSize && it.unitSize !== 1
+            ? `${it.name} (${it.unit} of ${it.unitSize}${it.baseUnit ? ` ${it.baseUnit}` : ""})`
+            : it.name,
         hsn: it.hsnCode || "—",
-        qty: it.quantity,
+        // "2 carton", "2.5 kg"
+        qty: it.unit ? `${it.quantity} ${it.unit}` : it.quantity,
         rate: money(it.unitPrice),
         disc: (() => {
           // Item discount + loyalty discount for this line, as an amount

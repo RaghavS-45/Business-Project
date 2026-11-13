@@ -47,6 +47,8 @@ const customerFields = z.object({
     .refine((v) => v === "" || STATE_CODES.includes(v), "Choose a valid state")
     .optional(),
 
+  priceLevel: z.enum(["RETAIL", "WHOLESALE", "DISTRIBUTOR"]).optional(),
+
   // null / "" = no credit limit, 0 = cash only
   creditLimit: z.preprocess(
     (v) => (v === "" || v === undefined ? undefined : v === null ? null : Number(v)),

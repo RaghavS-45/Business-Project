@@ -146,6 +146,44 @@ const productSchema = new mongoose.Schema(
       default: 0,
     },
 
+    // ─── Selling units & pricing (wholesale) ────────────────
+    // Other units it's sold in; stock stays in the base `unit`.
+    // e.g. { name: "carton", size: 12, price: 5400 } → 1 carton = 12 pcs
+    packs: {
+      type: [
+        new mongoose.Schema(
+          {
+            name: { type: String, required: true, trim: true, lowercase: true, maxlength: 30 },
+            size: { type: Number, required: true, min: [0.001, "Pack size must be more than 0"] },
+            price: { type: Number, min: 0, default: null }, // per pack; null = size × unit price
+          },
+          { _id: false }
+        ),
+      ],
+      default: [],
+    },
+
+    // Price per base unit for customers on these price levels
+    // (Retail uses sellingPrice). null = same as selling price.
+    levelPrices: {
+      wholesale: { type: Number, min: 0, default: null },
+      distributor: { type: Number, min: 0, default: null },
+    },
+
+    // Bulk pricing: from minQty base units, price per base unit
+    priceSlabs: {
+      type: [
+        new mongoose.Schema(
+          {
+            minQty: { type: Number, required: true, min: 0.001 },
+            price: { type: Number, required: true, min: 0 },
+          },
+          { _id: false }
+        ),
+      ],
+      default: [],
+    },
+
     // ─── HSN Code ───────────────────────────────────────────
     // Harmonised System code — required on B2B GST invoices.
     hsnCode: {

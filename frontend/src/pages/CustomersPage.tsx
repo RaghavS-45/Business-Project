@@ -21,6 +21,8 @@ import { getErrorMessage } from "@/lib/errors";
 import { formatINR } from "@/lib/pricing";
 import StateSelect, { GSTIN_PATTERN } from "@/components/gst/StateSelect";
 import RecordPaymentDialog from "@/components/receivables/RecordPaymentDialog";
+import { LEVEL_LABELS, PRICE_LEVELS, type PriceLevel } from "@/lib/unitPricing";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 
@@ -32,6 +34,7 @@ interface CustomerFormData {
   stateCode?: string;
   creditLimit?: string;
   paymentTermsDays?: string;
+  priceLevel?: PriceLevel;
   notes?: string;
 }
 
@@ -60,7 +63,7 @@ export default function CustomersPage() {
 
   const openCreate = () => {
     setEditing(null);
-    reset({ name: "", email: "", phone: "", gstin: "", stateCode: "", creditLimit: "", paymentTermsDays: "30", notes: "" });
+    reset({ name: "", email: "", phone: "", gstin: "", stateCode: "", creditLimit: "", paymentTermsDays: "30", priceLevel: "RETAIL", notes: "" });
     setDialogOpen(true);
   };
   const openEdit = (c: Record<string, unknown>) => {
@@ -73,6 +76,7 @@ export default function CustomersPage() {
       stateCode: (c.stateCode as string) || "",
       creditLimit: c.creditLimit === null || c.creditLimit === undefined ? "" : String(c.creditLimit),
       paymentTermsDays: String(c.paymentTermsDays ?? 30),
+      priceLevel: (c.priceLevel as PriceLevel) ?? "RETAIL",
       notes: (c.notes as string) || "",
     });
     setDialogOpen(true);
@@ -89,6 +93,7 @@ export default function CustomersPage() {
       // Blank = no limit
       creditLimit: data.creditLimit?.trim() ? Number(data.creditLimit) : null,
       paymentTermsDays: data.paymentTermsDays?.trim() ? Number(data.paymentTermsDays) : 30,
+      priceLevel: data.priceLevel ?? "RETAIL",
     };
     if (editing) {
       updateCustomer.mutate({ id: editing._id as string, ...payload }, {
@@ -148,12 +153,17 @@ export default function CustomersPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {customers.map((c: { _id: string; name: string; email?: string; phone?: string; gstin?: string; loyaltyPoints: number; totalPurchases: number; outstanding?: number; creditLimit?: number | null }) => (
+              {customers.map((c: { _id: string; name: string; email?: string; phone?: string; gstin?: string; loyaltyPoints: number; totalPurchases: number; outstanding?: number; creditLimit?: number | null; priceLevel?: PriceLevel }) => (
                 <TableRow key={c._id} className="border-border/30 hover:bg-muted/20">
                   <TableCell className="font-medium text-sm">
                     {c.name}
                     {c.gstin && (
                       <p className="mt-0.5 font-mono text-[11px] font-normal text-muted-foreground">GSTIN {c.gstin}</p>
+                    )}
+                    {c.priceLevel && c.priceLevel !== "RETAIL" && (
+                      <span className="mt-0.5 inline-flex rounded-full bg-emerald-500/10 px-1.5 py-px text-[10px] font-medium text-emerald-700 dark:text-emerald-400">
+                        {LEVEL_LABELS[c.priceLevel]}
+                      </span>
                     )}
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground hidden lg:table-cell">{c.email || "—"}</TableCell>
@@ -260,6 +270,23 @@ export default function CustomersPage() {
             <p className="-mt-2 text-[11px] text-muted-foreground">
               Buyers in another state are billed IGST; same state, CGST + SGST. The state is read from the GSTIN.
             </p>
+            <div className="space-y-2">
+              <Label>Price level</Label>
+              <Select value={watch("priceLevel") ?? "RETAIL"} onValueChange={(v) => setValue("priceLevel", v as PriceLevel)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PRICE_LEVELS.map((l) => (
+                    <SelectItem key={l} value={l}>
+                      {LEVEL_LABELS[l]}
+                      {l === "RETAIL" ? " (selling price)" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">Which product price they're billed at</p>
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="c-limit">Credit limit (₹)</Label>
