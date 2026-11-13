@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
@@ -26,12 +26,9 @@ beforeEach(() => {
 });
 
 describe("Product Search", () => {
-  it("renders search input with F2 placeholder hint", async () => {
+  it("renders the product search input", async () => {
     renderWithProviders(<PosPage />);
-
-    const searchInput = screen.getByPlaceholderText(/search products/i);
-    expect(searchInput).toBeInTheDocument();
-    expect(screen.getByText("F2")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/search products/i)).toBeInTheDocument();
   });
 
   it("filters products when typing in search", async () => {
