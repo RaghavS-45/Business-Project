@@ -23,6 +23,8 @@ const CATEGORIES = [
   "Sports & Outdoors", "Automotive", "Other",
 ];
 const UNITS = ["pcs", "kg", "g", "ltr", "ml", "m", "box", "pack", "dozen", "pair"];
+// Common GST slabs. Any other rate can still be saved through the API.
+const GST_RATES = [0, 0.25, 3, 5, 12, 18, 28, 40];
 
 const productSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -33,6 +35,12 @@ const productSchema = z.object({
   sellingPrice: z.coerce.number().min(0, "Must be >= 0"),
   stock: z.coerce.number().int().min(0, "Must be >= 0"),
   lowStockThreshold: z.coerce.number().int().min(0).optional(),
+  taxRate: z.coerce.number().min(0).max(100),
+  hsnCode: z
+    .string()
+    .trim()
+    .regex(/^(\d{4}|\d{6}|\d{8})?$/, "HSN code must be 4, 6 or 8 digits")
+    .optional(),
   description: z.string().optional(),
 });
 
@@ -64,13 +72,16 @@ export default function ProductForm({ defaultValues, onSuccess }: ProductFormPro
       costPrice: (defaultValues?.costPrice as number) || 0,
       sellingPrice: (defaultValues?.sellingPrice as number) || 0,
       stock: (defaultValues?.stock as number) || 0,
-      lowStockThreshold: (defaultValues?.lowStockThreshold as number) || 10,
+      lowStockThreshold: (defaultValues?.lowStockThreshold as number) ?? 10,
+      taxRate: (defaultValues?.taxRate as number) ?? 18,
+      hsnCode: (defaultValues?.hsnCode as string) || "",
       description: (defaultValues?.description as string) || "",
     },
   });
 
   const category = watch("category");
   const unit = watch("unit");
+  const taxRate = watch("taxRate");
 
   const onSubmit = (data: ProductFormData) => {
     if (isEdit) {
@@ -149,6 +160,37 @@ export default function ProductForm({ defaultValues, onSuccess }: ProductFormPro
               ))}
             </SelectContent>
           </Select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>GST Rate *</Label>
+          <Select value={String(taxRate)} onValueChange={(v) => setValue("taxRate", Number(v))}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {[...new Set([...GST_RATES, Number(taxRate)])]
+                .sort((a, b) => a - b)
+                .map((r) => (
+                  <SelectItem key={r} value={String(r)}>
+                    {r === 0 ? "0% (exempt / nil)" : `${r}%`}
+                  </SelectItem>
+                ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="hsnCode">HSN Code</Label>
+          <Input
+            id="hsnCode"
+            inputMode="numeric"
+            placeholder="e.g. 8517"
+            {...register("hsnCode")}
+            className={errors.hsnCode ? "border-destructive" : ""}
+          />
+          {errors.hsnCode && <p className="text-xs text-destructive">{errors.hsnCode.message}</p>}
         </div>
       </div>
 

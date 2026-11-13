@@ -11,6 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { CheckCircle, XCircle, PackageCheck } from "lucide-react";
+import { formatPrice } from "@/lib/pricing";
 
 interface Props {
   poId: string;
@@ -24,11 +25,11 @@ interface Props {
 function statusBadge(status: string) {
   switch (status) {
     case "pending":
-      return <Badge className="text-xs bg-amber-500/10 text-amber-400 border-amber-500/20">Pending</Badge>;
+      return <Badge className="text-xs bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">Pending</Badge>;
     case "approved":
-      return <Badge className="text-xs bg-blue-500/10 text-blue-400 border-blue-500/20">Approved</Badge>;
+      return <Badge className="text-xs bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20">Approved</Badge>;
     case "received":
-      return <Badge className="text-xs bg-emerald-500/10 text-emerald-400 border-emerald-500/20">Received</Badge>;
+      return <Badge className="text-xs bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">Received</Badge>;
     case "rejected":
       return <Badge variant="destructive" className="text-xs">Rejected</Badge>;
     default:
@@ -94,7 +95,7 @@ export default function PurchaseOrderDetail({ poId, onStatusChange }: Props) {
         {po.receivedAt && (
           <div className="space-y-0.5">
             <p className="text-xs text-muted-foreground">Received on</p>
-            <p className="text-emerald-400 text-xs">
+            <p className="text-emerald-600 dark:text-emerald-400 text-xs">
               {new Date(po.receivedAt).toLocaleDateString("en-IN", {
                 day: "2-digit",
                 month: "short",
@@ -165,10 +166,10 @@ export default function PurchaseOrderDetail({ poId, onStatusChange }: Props) {
                   </TableCell>
                   <TableCell className="text-right text-sm">{item.quantity}</TableCell>
                   <TableCell className="text-right text-xs text-muted-foreground">
-                    ₹{item.unitCost.toLocaleString("en-IN")}
+                    {formatPrice(item.unitCost)}
                   </TableCell>
                   <TableCell className="text-right text-sm font-medium">
-                    ₹{(item.quantity * item.unitCost).toLocaleString("en-IN")}
+                    {formatPrice((item.quantity * item.unitCost))}
                   </TableCell>
                 </TableRow>
               )
@@ -178,7 +179,7 @@ export default function PurchaseOrderDetail({ poId, onStatusChange }: Props) {
                 Total
               </TableCell>
               <TableCell className="text-right text-sm font-bold">
-                ₹{totalAmount.toLocaleString("en-IN")}
+                {formatPrice(totalAmount)}
               </TableCell>
             </TableRow>
           </TableBody>
@@ -227,7 +228,7 @@ export default function PurchaseOrderDetail({ poId, onStatusChange }: Props) {
           </Button>
         )}
         {po.status === "received" && (
-          <p className="text-xs text-emerald-400 flex items-center gap-1.5">
+          <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
             <PackageCheck className="h-4 w-4" />
             Inventory was updated when this PO was received
           </p>

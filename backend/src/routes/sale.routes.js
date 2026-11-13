@@ -9,6 +9,9 @@ import {
   refundSchema,
 } from "../validators/sale.validator.js";
 
+import returnService from "../services/return.service.js";
+import { createReturnSchema } from "../validators/return.validator.js";
+
 const router = Router();
 
 /**
@@ -59,6 +62,37 @@ router.get("/:id", saleController.getById);
 
 // ─── Get signed receipt URL (short-lived, private) ───────
 router.get("/:id/receipt", saleController.getReceipt);
+
+// ─── GST tax invoice PDF (generated on demand) ───────────
+router.get("/:id/invoice", saleController.getInvoicePdf);
+
+// ─── Returns (partial or full) → credit note ─────────────
+router.post(
+  "/:id/returns",
+  authorize("ADMIN", "MANAGER"),
+  validate(createReturnSchema),
+  async (req, res, next) => {
+    try {
+      const { creditNote, sale } = await returnService.createReturn(req.params.id, req.body, req.user._id);
+      res.status(201).json({
+        success: true,
+        message: `Credit note ${creditNote.creditNoteNumber} issued`,
+        data: { creditNote, sale },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+router.get("/:id/returns", authorize("ADMIN", "MANAGER"), async (req, res, next) => {
+  try {
+    const creditNotes = await returnService.listForSale(req.params.id);
+    res.json({ success: true, data: { creditNotes } });
+  } catch (error) {
+    next(error);
+  }
+});
 
 // ─── Refund ──────────────────────────────────────────────
 router.post(

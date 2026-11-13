@@ -92,7 +92,7 @@ const totalPages = data?.totalPages || Math.ceil(total / 15) || 1;
         <Input placeholder="Search vendors..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} className="pl-9" />
       </div>
 
-      <div className="rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
+      <div className="rounded-xl border border-border/50 bg-card overflow-hidden">
         {isLoading ? (
           <div className="p-6 space-y-3">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
         ) : (

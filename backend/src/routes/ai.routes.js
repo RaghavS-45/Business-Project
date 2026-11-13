@@ -1,7 +1,7 @@
 
 import express from "express";
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
-import Sale from "../models/Sale.js";
+import Sale, { REVENUE_STATUSES, NET_SALE_VALUE } from "../models/Sale.js";
 import Product from "../models/Product.js";
 import authenticate from "../middleware/authenticate.js";
 
@@ -34,8 +34,8 @@ const TTL = 5 * 60 * 1000;
 
 async function periodStats(from, to) {
   const r = await Sale.aggregate([
-    { $match: { createdAt: { $gte: from, $lte: to }, status: "COMPLETED" } },
-    { $group: { _id: null, revenue: { $sum: "$grandTotal" }, orders: { $sum: 1 } } },
+    { $match: { createdAt: { $gte: from, $lte: to }, status: { $in: REVENUE_STATUSES } } },
+    { $group: { _id: null, revenue: { $sum: NET_SALE_VALUE }, orders: { $sum: 1 } } },
   ]);
   const { revenue = 0, orders = 0 } = r[0] || {};
   return { revenue, orders, avgOrder: orders ? Math.round(revenue / orders) : 0 };
@@ -72,13 +72,13 @@ router.get("/insights", authenticate, async (req, res, next) => {
       periodStats(prevFrom, prevTo),
       days > 1
         ? Sale.aggregate([
-            { $match: { createdAt: { $gte: from, $lte: to }, status: "COMPLETED" } },
+            { $match: { createdAt: { $gte: from, $lte: to }, status: { $in: REVENUE_STATUSES } } },
             {
               $group: {
                 _id: {
                   $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: "Asia/Kolkata" },
                 },
-                revenue: { $sum: "$grandTotal" },
+                revenue: { $sum: NET_SALE_VALUE },
                 orders: { $sum: 1 },
               },
             },
@@ -87,8 +87,8 @@ router.get("/insights", authenticate, async (req, res, next) => {
           ])
         : Promise.resolve([]),
       Sale.aggregate([
-        { $match: { createdAt: { $gte: from, $lte: to }, status: "COMPLETED" } },
-        { $group: { _id: "$paymentMethod", total: { $sum: "$grandTotal" }, count: { $sum: 1 } } },
+        { $match: { createdAt: { $gte: from, $lte: to }, status: { $in: REVENUE_STATUSES } } },
+        { $group: { _id: "$paymentMethod", total: { $sum: NET_SALE_VALUE }, count: { $sum: 1 } } },
       ]),
       Product.find({ $expr: { $lte: ["$stock", "$lowStockThreshold"] } })
         .select("name stock lowStockThreshold -_id")

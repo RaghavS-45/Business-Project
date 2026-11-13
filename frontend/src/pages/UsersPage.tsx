@@ -26,9 +26,9 @@ const ROLES = ["ADMIN", "MANAGER", "CASHIER"] as const;
 type Role = typeof ROLES[number];
 
 const roleBadgeClass: Record<Role, string> = {
-    ADMIN: "bg-blue-500/10 text-blue-400 border-blue-500/20",
-    MANAGER: "bg-blue-500/10 text-blue-400 border-blue-500/20",
-    CASHIER: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+    ADMIN: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
+    MANAGER: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
+    CASHIER: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
 };
 
 interface User {
@@ -157,8 +157,8 @@ export default function UsersPage() {
                                                 variant="outline"
                                                 className={
                                                     user.isActive
-                                                        ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 cursor-pointer"
-                                                        : "bg-red-500/10 text-red-400 border-red-500/20 cursor-pointer"
+                                                        ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 cursor-pointer"
+                                                        : "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20 cursor-pointer"
                                                 }
                                             >
                                                 {user.isActive ? "Active" : "Inactive"}
@@ -192,7 +192,7 @@ export default function UsersPage() {
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
-                            <ShieldCheck className="h-5 w-5 text-blue-400" />
+                            <ShieldCheck className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                             Add Team Member
                         </DialogTitle>
                     </DialogHeader>

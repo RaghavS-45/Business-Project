@@ -8,8 +8,12 @@
  *   raw      = quantity × unit price
  *   discount = raw × item discount %
  *   loyalty  = (raw − discount) × loyalty tier %
- *   tax      = (raw − discount − loyalty) × tax %
- *   line     = raw − discount − loyalty + tax
+ *   net      = raw − discount − loyalty
+ *
+ *   GST-exclusive prices (default — wholesale / B2B):
+ *     taxable = net,   tax = taxable × rate %,   line = taxable + tax
+ *   GST-inclusive prices (MRP-style retail):
+ *     line = net,   taxable = net × 100 / (100 + rate),   tax = line − taxable
  *
  * Cart totals are plain sums of the per-line integers, so
  *   subtotal − discount − loyalty + tax  ===  sum of line totals  ===  grand total
@@ -34,25 +38,35 @@ export const roundMoney = (rupees) => toRupees(toPaise(rupees));
 /**
  * Price a single line. All returned amounts are integers in paise.
  */
-export function priceLine({ quantity, unitPrice, discountPercent = 0, taxPercent = 0 }, loyaltyPercent = 0) {
+export function priceLine(
+  { quantity, unitPrice, discountPercent = 0, taxPercent = 0 },
+  loyaltyPercent = 0,
+  { taxInclusive = false } = {}
+) {
   const raw = roundHalfUp(quantity * toPaise(unitPrice));
   const discount = roundHalfUp((raw * discountPercent) / 100);
   const loyalty = roundHalfUp(((raw - discount) * loyaltyPercent) / 100);
-  const tax = roundHalfUp(((raw - discount - loyalty) * taxPercent) / 100);
-  return { raw, discount, loyalty, tax, total: raw - discount - loyalty + tax };
+  const net = raw - discount - loyalty;
+  if (taxInclusive) {
+    const taxable = roundHalfUp((net * 100) / (100 + taxPercent));
+    return { raw, discount, loyalty, taxable, tax: net - taxable, total: net };
+  }
+  const tax = roundHalfUp((net * taxPercent) / 100);
+  return { raw, discount, loyalty, taxable: net, tax, total: net + tax };
 }
 
 /**
  * Price a whole cart. Totals are integers in paise.
  */
-export function priceCart(items, loyaltyPercent = 0) {
-  const lines = items.map((item) => priceLine(item, loyaltyPercent));
+export function priceCart(items, loyaltyPercent = 0, options = {}) {
+  const lines = items.map((item) => priceLine(item, loyaltyPercent, options));
   const sum = (key) => lines.reduce((s, l) => s + l[key], 0);
   return {
     lines,
     subtotal: sum("raw"),
     discount: sum("discount"),
     loyalty: sum("loyalty"),
+    taxable: sum("taxable"),
     tax: sum("tax"),
     grandTotal: sum("total"),
   };

@@ -49,12 +49,51 @@ const customerSchema = new mongoose.Schema(
       match: [/^[+\d\s\-().]{7,20}$/, "Please provide a valid phone number"],
     },
 
+    // ─── GST details (wholesale buyers) ─────────────────
+    // GSTIN of a registered business buyer — printed on the invoice so they
+    // can claim input tax credit.
+    gstin: {
+      type: String,
+      trim: true,
+      uppercase: true,
+      default: "",
+    },
+    // GST state code of the buyer ("07" = Delhi). Decides CGST+SGST (same
+    // state as the store) vs IGST (another state). Taken from the GSTIN
+    // when there is one.
+    stateCode: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
     address: {
       type: addressSchema,
       default: () => ({}),
     },
 
     // ─── Loyalty / Analytics (Phase 5 hooks) ─────────────
+    // ─── Credit (wholesale) ─────────────────────────────
+    // Max unpaid amount allowed. null = no limit, 0 = cash only.
+    creditLimit: {
+      type: Number,
+      min: [0, "Credit limit cannot be negative"],
+      default: null,
+    },
+    // Days allowed to pay a credit bill (sets each invoice's due date)
+    paymentTermsDays: {
+      type: Number,
+      min: 0,
+      max: 365,
+      default: 30,
+    },
+    // Total unpaid across all invoices (kept in step by checkout,
+    // payments and returns, inside their transactions)
+    outstanding: {
+      type: Number,
+      default: 0,
+    },
+
     loyaltyPoints: {
       type: Number,
       min: [0, "Loyalty points cannot be negative"],

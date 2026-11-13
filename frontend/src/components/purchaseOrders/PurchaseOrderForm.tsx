@@ -16,6 +16,7 @@ import {
 import { Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { getErrorMessage } from "@/lib/errors";
+import { formatPrice } from "@/lib/pricing";
 
 interface LineItemField {
   product: string;
@@ -201,7 +202,7 @@ export default function PurchaseOrderForm({ onSuccess }: Props) {
 
                   {subtotal > 0 && (
                     <div className="col-span-4 text-right text-[10px] text-muted-foreground pr-10 -mt-1 pb-1">
-                      Subtotal: ₹{subtotal.toLocaleString("en-IN")}
+                      Subtotal: {formatPrice(subtotal)}
                     </div>
                   )}
                 </div>
@@ -212,7 +213,7 @@ export default function PurchaseOrderForm({ onSuccess }: Props) {
           {/* Total row */}
           <div className="px-3 py-2 bg-muted/20 flex justify-end border-t border-border/30">
             <span className="text-sm font-semibold">
-              Total: ₹{totalAmount.toLocaleString("en-IN")}
+              Total: {formatPrice(totalAmount)}
             </span>
           </div>
         </div>

@@ -21,6 +21,9 @@ const CustomersPage = lazy(() => import("@/pages/CustomersPage"));
 const VendorsPage = lazy(() => import("@/pages/VendorsPage"));
 const UsersPage = lazy(() => import("@/pages/UsersPage"));
 const PurchaseOrdersPage = lazy(() => import("@/pages/PurchaseOrdersPage"));
+const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
+const ReceivablesPage = lazy(() => import("@/pages/ReceivablesPage"));
+const CustomerStatementPage = lazy(() => import("@/pages/CustomerStatementPage"));
 
 /** Route loading fallback */
 function PageLoader() {
@@ -78,6 +81,12 @@ export default function App() {
                     <Route path="/sales" element={<SalesPage />} />
                   </Route>
 
+                  {/* Dues / customer statements — admin/manager only */}
+                  <Route element={<ProtectedRoute roles={["ADMIN", "MANAGER"]} />}>
+                    <Route path="/receivables" element={<ReceivablesPage />} />
+                    <Route path="/customers/:id/statement" element={<CustomerStatementPage />} />
+                  </Route>
+
                   {/* Customers — all roles (cashier can create walk-ins) */}
                   <Route path="/customers" element={<CustomersPage />} />
 
@@ -94,6 +103,7 @@ export default function App() {
 
                   <Route element={<ProtectedRoute roles={["ADMIN"]} />}>
                     <Route path="/users" element={<UsersPage />} />
+                    <Route path="/settings" element={<SettingsPage />} />
                   </Route>
                 </Route>
               </Route>

@@ -1,4 +1,5 @@
 import saleService from "../services/sale.service.js";
+import { renderInvoicePdf } from "../services/invoicePdf.service.js";
 import receiptService from "../services/receipt.service.js";
 
 /**
@@ -22,14 +23,15 @@ class SaleController {
    */
   async checkout(req, res, next) {
     try {
-      const { items, customerId, paymentMethod, notes } = req.body;
+      const { items, customerId, paymentMethod, notes, amountPaid } = req.body;
 
       const sale = await saleService.checkout(
         items,
         customerId,
         paymentMethod,
         req.user,
-        notes
+        notes,
+        { amountPaid }
       );
 
       res.status(201).json({
@@ -115,6 +117,28 @@ class SaleController {
         success: true,
         data: { signedUrl, expiresInSeconds: 3600 },
       });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * GET /api/sales/:id/invoice
+   * Streams the GST tax invoice PDF, generated on demand from the sale.
+   * Works without Redis/Cloudinary.
+   */
+  async getInvoicePdf(req, res, next) {
+    try {
+      const sale = await saleService.getById(req.params.id);
+      const pdf = await renderInvoicePdf(sale);
+      const download = req.query.download === "1";
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `${download ? "attachment" : "inline"}; filename="${sale.invoiceNumber}.pdf"`
+      );
+      res.setHeader("Cache-Control", "private, no-store");
+      res.send(pdf);
     } catch (error) {
       next(error);
     }

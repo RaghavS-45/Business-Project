@@ -190,9 +190,11 @@ describe("POS Page — Checkout Flow", () => {
 
     // Dialog should be open
     await waitFor(() => {
-      expect(screen.getByText("Confirm Checkout")).toBeInTheDocument();
-      expect(screen.getByText("Walk-in")).toBeInTheDocument();
-      expect(screen.getByText("CASH")).toBeInTheDocument();
+      const dialog = screen.getByRole("dialog");
+      expect(within(dialog).getByText("Confirm Checkout")).toBeInTheDocument();
+      expect(within(dialog).getByText("Walk-in")).toBeInTheDocument();
+      // Payment method is shown by its label
+      expect(within(dialog).getByText("Cash")).toBeInTheDocument();
     });
   });
 

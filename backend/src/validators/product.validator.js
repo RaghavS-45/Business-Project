@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { PRODUCT_CATEGORIES, PRODUCT_UNITS } from "../models/Product.js";
 import { optionalField } from "./helpers.js";
+import { HSN_REGEX } from "../utils/gst.js";
 
 /**
  * Zod schemas for Product route validation.
@@ -67,6 +68,20 @@ export const createProductSchema = z.object({
     .int("Low stock threshold must be a whole number")
     .min(0, "Threshold cannot be negative")
     .default(10),
+
+  // GST rate in percent. Any value 0–100 is accepted so new slabs need no code change.
+  taxRate: z.coerce
+    .number()
+    .min(0, "GST rate cannot be negative")
+    .max(100, "GST rate cannot exceed 100%")
+    .default(0),
+
+  hsnCode: z
+    .string()
+    .trim()
+    .refine((v) => v === "" || HSN_REGEX.test(v), "HSN code must be 4, 6 or 8 digits")
+    .optional()
+    .default(""),
 
   vendor: optionalField(
     z.string().regex(/^[a-fA-F0-9]{24}$/, "vendor must be a valid MongoDB ObjectId")

@@ -137,13 +137,21 @@ const productSchema = new mongoose.Schema(
     },
 
     // ─── Tax Rate ───────────────────────────────────────────
-    // GST / VAT percentage applied at checkout.
+    // GST percentage (e.g. 0, 5, 12, 18, 28) applied at checkout.
     // Set per-product so tax is never controlled by the cashier.
     taxRate: {
       type: Number,
       min: [0, "Tax rate cannot be negative"],
       max: [100, "Tax rate cannot exceed 100%"],
       default: 0,
+    },
+
+    // ─── HSN Code ───────────────────────────────────────────
+    // Harmonised System code — required on B2B GST invoices.
+    hsnCode: {
+      type: String,
+      trim: true,
+      default: "",
     },
 
     // ─── Vendor Reference ───────────────────────────────────

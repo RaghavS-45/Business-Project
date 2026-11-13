@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import Sale from "../models/Sale.js";
+import Sale, { REVENUE_STATUSES, NET_SALE_VALUE } from "../models/Sale.js";
 import Product from "../models/Product.js";
 import Customer from "../models/Customer.js";
 import ApiError from "../utils/ApiError.js";
@@ -7,8 +7,12 @@ import logger from "../config/logger.js";
 import { addJob, QUEUE_NAMES } from "../config/queue.js";
 
 import { getTier } from "../utils/loyalty.js";
-import { priceLine, pointsForPaise, toRupees, roundMoney } from "../utils/pricing.js";
+import { priceLine, pointsForPaise, toPaise, toRupees, roundMoney } from "../utils/pricing.js";
 import LoyaltyTransaction from "../models/LoyaltyTransaction.js";
+import { nextDocumentNumber, resyncCounter } from "../utils/documentNumber.js";
+import settingsService from "./settings.service.js";
+import returnService from "./return.service.js";
+import { splitTax, stateInfo, stateFromGstin } from "../utils/gst.js";
 
 /**
  * Sale Service — Checkout Pipeline with Mongoose Transactions
@@ -32,28 +36,29 @@ import LoyaltyTransaction from "../models/LoyaltyTransaction.js";
  * stock < quantity.
  */
 
+const MAX_CHECKOUT_ATTEMPTS = 3;
+const INVOICE_SERIES = { series: "INV", counter: "invoice", model: Sale, field: "invoiceNumber" };
+
+/** E11000 on Sale.invoiceNumber. */
+const isDuplicateInvoiceError = (error) =>
+  error?.code === 11000 && Boolean(error.keyPattern?.invoiceNumber ?? /invoiceNumber/.test(error.message));
+
 class SaleService {
   /**
-   * Generate the next invoice number: INV-YYYYMMDD-XXXX
-   * Uses today's sale count to create a daily sequence.
+   * Next invoice number for the store day: INV-YYYYMMDD-NNNN.
+   * See utils/documentNumber.js for how numbers stay unique and gap-free.
    *
+   * @param {ClientSession} [session] - the checkout transaction
+   * @param {Date} [now]
    * @private
    */
-  async _generateInvoiceNumber() {
-    const now = new Date();
-    const dateStr = now.toISOString().slice(0, 10).replace(/-/g, "");
+  _generateInvoiceNumber(session = null, now = new Date()) {
+    return nextDocumentNumber({ ...INVOICE_SERIES, session, now });
+  }
 
-    // Count sales created today for the sequence number
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const endOfDay = new Date(startOfDay);
-    endOfDay.setDate(endOfDay.getDate() + 1);
-
-    const todayCount = await Sale.countDocuments({
-      createdAt: { $gte: startOfDay, $lt: endOfDay },
-    });
-
-    const seq = String(todayCount + 1).padStart(4, "0");
-    return `INV-${dateStr}-${seq}`;
+  /** @private */
+  _resyncInvoiceCounter(now = new Date()) {
+    return resyncCounter({ ...INVOICE_SERIES, now });
   }
 
   /**
@@ -79,7 +84,7 @@ class SaleService {
    * @param {string} notes         - Optional notes
    * @returns {Promise<Object>}    - The created Sale document
    */
-  async checkout(cartItems, customerId, paymentMethod, cashierUser, notes = "") {
+  async checkout(cartItems, customerId, paymentMethod, cashierUser, notes = "", { amountPaid } = {}) {
     // ── Role-based discount caps ─────────────────────────────
     // Cashiers cannot set arbitrary discounts.
     const DISCOUNT_CAPS = {
@@ -89,190 +94,42 @@ class SaleService {
     };
     const maxDiscount = DISCOUNT_CAPS[cashierUser.role] ?? 0;
 
-    const session = await mongoose.startSession();
-    session.startTransaction();
+    let sale; // visible in the post-commit block
 
-    let sale; // declared outside try so it's visible in the post-commit block
-    try {
-      const saleItems = [];
-      // Running totals in whole paise — summed from the per-line amounts so
-      // the lines always add up to the grand total exactly.
-      let subtotalP = 0;
-      let taxP = 0;
-      let discountP = 0;
-      let loyaltyP = 0;
-      let grandP = 0;
-
-      let loyaltyPercent = 0;
-      let loyaltyTier = null;
-
-      if (customerId) {
-        const customer = await Customer.findById(customerId).session(session);
-        if (!customer) throw ApiError.notFound(`Customer not found: ${customerId}`);
-        const tier = getTier(customer.loyaltyPoints); // tier BEFORE this sale
-        loyaltyPercent = tier.discount;
-        loyaltyTier = tier.name;
-      }
-
-      // ─── Process each cart item within the transaction ───
-      for (const item of cartItems) {
-        // ── Validate discount cap ────────────────────────
-        const discountPercent = item.discountPercent || 0;
-        if (discountPercent < 0 || discountPercent > 100) {
-          throw ApiError.badRequest(`Invalid discountPercent: ${discountPercent}`);
-        }
-        if (discountPercent > maxDiscount) {
-          throw ApiError.badRequest(
-            `Your role (${cashierUser.role}) allows a maximum discount of ${maxDiscount}%. ` +
-            `Requested: ${discountPercent}%.`
-          );
-        }
-
-        // Atomically decrement stock with optimistic lock
-        // The $gte guard ensures stock never goes negative
-        const product = await Product.findOneAndUpdate(
-          {
-            _id: item.product,
-            isActive: true,
-            stock: { $gte: item.quantity }, // Optimistic concurrency guard
-          },
-          {
-            $inc: { stock: -item.quantity },
-          },
-          {
-            new: true, // Return the updated document
-            session,
-          }
+    // Each attempt runs the whole checkout as one transaction. The driver's
+    // withTransaction() already retries write conflicts (two cashiers selling
+    // the same product, or taking the next invoice number, at the same
+    // moment). The outer loop only covers a duplicate invoice number, which
+    // can happen if the day's counter fell behind — it is resynced first.
+    for (let attempt = 1; ; attempt++) {
+      try {
+        sale = await this._checkoutTransaction(
+          cartItems, customerId, paymentMethod, cashierUser, notes, maxDiscount, amountPaid
         );
-
-        if (!product) {
-          // Check if the product exists at all for a better error message
-          const exists = await Product.findById(item.product).session(session);
-          if (!exists) {
-            throw ApiError.notFound(`Product not found: ${item.product}`);
-          }
-          if (!exists.isActive) {
-            throw ApiError.badRequest(`Product is inactive: ${exists.name}`);
-          }
-          throw ApiError.badRequest(
-            `Insufficient stock for "${exists.name}": requested ${item.quantity}, available ${exists.stock}`
-          );
+        break;
+      } catch (error) {
+        if (attempt < MAX_CHECKOUT_ATTEMPTS && isDuplicateInvoiceError(error)) {
+          logger.warn("Duplicate invoice number — resyncing counter and retrying", {
+            attempt,
+            error: error.message,
+          });
+          await this._resyncInvoiceCounter();
+          continue;
         }
-
-        // Tax is always read from the product — never from the request body.
-        const taxPercent = product.taxRate ?? 0;
-
-        const line = priceLine(
-          {
-            quantity: item.quantity,
-            unitPrice: product.sellingPrice,
-            discountPercent,
-            taxPercent,
-          },
-          loyaltyPercent
-        );
-        const lineTotal = toRupees(line.total);
-
-        subtotalP += line.raw;
-        discountP += line.discount;
-        loyaltyP += line.loyalty;
-        taxP += line.tax;
-        grandP += line.total;
-
-        // Snapshot product data into the line item
-        saleItems.push({
-          product: product._id,
-          name: product.name,
-          sku: product.sku,
-          quantity: item.quantity,
-          unitPrice: product.sellingPrice,
-          costPrice: product.costPrice,
-          discountPercent,
-          taxPercent,
-          lineTotal,
+        logger.error("Checkout failed — transaction rolled back", {
+          error: error.message,
+          cashier: cashierUser?.email,
         });
+        throw error;
       }
-
-      const subtotal = toRupees(subtotalP);
-      const taxTotal = toRupees(taxP);
-      const discountTotal = toRupees(discountP);
-      const loyaltyDiscountTotal = toRupees(loyaltyP);
-      const grandTotal = toRupees(grandP);
-
-      // Generate invoice number
-      const invoiceNumber = await this._generateInvoiceNumber();
-
-      // Create the Sale document within the transaction
-      const [created] = await Sale.create(
-        [
-          {
-            invoiceNumber,
-            customer: customerId || null,
-            cashier: cashierUser._id,
-            items: saleItems,
-            subtotal,
-            taxTotal,
-            discountTotal,
-            loyaltyTier,
-            loyaltyDiscountPercent: loyaltyPercent,
-            loyaltyDiscountTotal,
-            grandTotal,
-            paymentMethod,
-            notes,
-          },
-        ],
-        { session }
-      );
-      sale = created;
-
-      // Update customer loyalty if not a walk-in
-      if (customerId) {
-          const loyaltyPoints = pointsForPaise(grandP);
-
-          // Pipeline update so the running ₹ total is re-rounded to 2 decimals
-          // on every sale — a plain $inc lets float error pile up over time.
-          await Customer.updateOne(
-            { _id: customerId },
-            [
-              {
-                $set: {
-                  totalPurchases: {
-                    $round: [{ $add: [{ $ifNull: ["$totalPurchases", 0] }, grandTotal] }, 2],
-                  },
-                  loyaltyPoints: { $add: [{ $ifNull: ["$loyaltyPoints", 0] }, loyaltyPoints] },
-                },
-              },
-            ],
-            { session }
-          );
-
-          if (loyaltyPoints > 0) {
-            await LoyaltyTransaction.create(
-              [{ customer: customerId, sale: sale._id, points: loyaltyPoints, type: "earn" }],
-              { session }
-            );
-          }
-      }
-      // ─── Commit the transaction ─────────────────────────
-      await session.commitTransaction();
-
-      logger.info(`Checkout completed: ${invoiceNumber}`, {
-        saleId: sale._id,
-        cashier: cashierUser.email,
-        itemCount: saleItems.length,
-        grandTotal,
-      });
-    } catch (error) {
-      // Roll back the entire transaction on any error
-      await session.abortTransaction();
-      logger.error("Checkout failed — transaction rolled back", {
-        error: error.message,
-        cashier: cashierUser?.email,
-      });
-      throw error;
-    } finally {
-      session.endSession();
     }
+
+    logger.info(`Checkout completed: ${sale.invoiceNumber}`, {
+      saleId: sale._id,
+      cashier: cashierUser.email,
+      itemCount: sale.items.length,
+      grandTotal: sale.grandTotal,
+    });
 
     // ─── Enqueue background jobs (AFTER commit, outside transaction) ──
     // A failure here must never cause a 500 that misleads the cashier into
@@ -307,6 +164,279 @@ class SaleService {
     return sale;
   }
 
+  /**
+   * One checkout attempt as a single transaction. Returns the committed sale.
+   * Everything is recomputed from scratch on each try, so retries are safe.
+   * @private
+   */
+  async _checkoutTransaction(cartItems, customerId, paymentMethod, cashierUser, notes, maxDiscount, amountPaid) {
+    const session = await mongoose.startSession();
+    let sale;
+    try {
+      await session.withTransaction(async () => {
+        const saleItems = [];
+        // Running totals in whole paise — summed from the per-line amounts so
+        // the lines always add up to the grand total exactly.
+        let subtotalP = 0;
+        let taxP = 0;
+        let discountP = 0;
+        let loyaltyP = 0;
+        let grandP = 0;
+
+        let loyaltyPercent = 0;
+        let loyaltyTier = null;
+
+        let customer = null;
+        if (customerId) {
+          customer = await Customer.findById(customerId).session(session);
+          if (!customer) throw ApiError.notFound(`Customer not found: ${customerId}`);
+          const tier = getTier(customer.loyaltyPoints); // tier BEFORE this sale
+          loyaltyPercent = tier.discount;
+          loyaltyTier = tier.name;
+        }
+
+        // ── GST context ──────────────────────────────────
+        // Place of supply is the buyer's state (from their GSTIN, else their
+        // saved state); for walk-ins it is the store's own state. A buyer in
+        // a different state is charged IGST, otherwise CGST + SGST.
+        const store = await settingsService.get(session);
+        const pricing = { taxInclusive: Boolean(store.pricesIncludeTax) };
+        const buyerState = stateFromGstin(customer?.gstin) || customer?.stateCode || "";
+        const placeOfSupply = stateInfo(buyerState || store.stateCode);
+        const interState = Boolean(
+          store.stateCode && placeOfSupply && placeOfSupply.code !== store.stateCode
+        );
+        let taxableP = 0;
+        let cgstP = 0;
+        let sgstP = 0;
+        let igstP = 0;
+
+        // ─── Process each cart item within the transaction ───
+        for (const item of cartItems) {
+          // ── Validate discount cap ────────────────────────
+          const discountPercent = item.discountPercent || 0;
+          if (discountPercent < 0 || discountPercent > 100) {
+            throw ApiError.badRequest(`Invalid discountPercent: ${discountPercent}`);
+          }
+          if (discountPercent > maxDiscount) {
+            throw ApiError.badRequest(
+              `Your role (${cashierUser.role}) allows a maximum discount of ${maxDiscount}%. ` +
+              `Requested: ${discountPercent}%.`
+            );
+          }
+
+          // Atomically decrement stock with optimistic lock
+          // The $gte guard ensures stock never goes negative
+          const product = await Product.findOneAndUpdate(
+            {
+              _id: item.product,
+              isActive: true,
+              stock: { $gte: item.quantity }, // Optimistic concurrency guard
+            },
+            {
+              $inc: { stock: -item.quantity },
+            },
+            {
+              new: true, // Return the updated document
+              session,
+            }
+          );
+
+          if (!product) {
+            // Check if the product exists at all for a better error message
+            const exists = await Product.findById(item.product).session(session);
+            if (!exists) {
+              throw ApiError.notFound(`Product not found: ${item.product}`);
+            }
+            if (!exists.isActive) {
+              throw ApiError.badRequest(`Product is inactive: ${exists.name}`);
+            }
+            throw ApiError.badRequest(
+              `Insufficient stock for "${exists.name}": requested ${item.quantity}, available ${exists.stock}`
+            );
+          }
+
+          // Tax is always read from the product — never from the request body.
+          const taxPercent = product.taxRate ?? 0;
+
+          const line = priceLine(
+            {
+              quantity: item.quantity,
+              unitPrice: product.sellingPrice,
+              discountPercent,
+              taxPercent,
+            },
+            loyaltyPercent,
+            pricing
+          );
+          const lineTotal = toRupees(line.total);
+          const gst = splitTax(line.tax, interState);
+          taxableP += line.taxable;
+          cgstP += gst.cgst;
+          sgstP += gst.sgst;
+          igstP += gst.igst;
+
+          subtotalP += line.raw;
+          discountP += line.discount;
+          loyaltyP += line.loyalty;
+          taxP += line.tax;
+          grandP += line.total;
+
+          // Snapshot product data into the line item
+          saleItems.push({
+            product: product._id,
+            name: product.name,
+            sku: product.sku,
+            quantity: item.quantity,
+            unitPrice: product.sellingPrice,
+            costPrice: product.costPrice,
+            discountPercent,
+            taxPercent,
+            hsnCode: product.hsnCode || "",
+            taxableValue: toRupees(line.taxable),
+            cgst: toRupees(gst.cgst),
+            sgst: toRupees(gst.sgst),
+            igst: toRupees(gst.igst),
+            lineTotal,
+          });
+        }
+
+        const subtotal = toRupees(subtotalP);
+        const taxTotal = toRupees(taxP);
+        const discountTotal = toRupees(discountP);
+        const loyaltyDiscountTotal = toRupees(loyaltyP);
+        const grandTotal = toRupees(grandP);
+
+        // ── Payment: paid in full, part-paid, or on credit ──
+        // CREDIT means nothing paid now; otherwise the method is how the
+        // paid part was paid, and amountPaid defaults to the full bill.
+        const paidP =
+          amountPaid === undefined || amountPaid === null
+            ? paymentMethod === "CREDIT" ? 0 : grandP
+            : toPaise(amountPaid);
+        if (paidP < 0 || paidP > grandP) {
+          throw ApiError.badRequest(`Amount paid must be between ₹0 and the bill total ₹${toRupees(grandP)}`);
+        }
+        if (paymentMethod === "CREDIT" && paidP > 0) {
+          throw ApiError.badRequest("Choose how the paid part was paid (cash, UPI, …) instead of Credit");
+        }
+        const dueP = grandP - paidP;
+        let dueDate = null;
+        if (dueP > 0) {
+          if (!customer) {
+            throw ApiError.badRequest("Walk-in sales must be paid in full. Choose a customer to sell on credit.");
+          }
+          const outstandingP = toPaise(customer.outstanding ?? 0);
+          if (customer.creditLimit !== null && customer.creditLimit !== undefined) {
+            const limitP = toPaise(customer.creditLimit);
+            if (outstandingP + dueP > limitP) {
+              throw ApiError.badRequest(
+                `Credit limit exceeded for ${customer.name}: owes ₹${toRupees(outstandingP)}, ` +
+                  `limit ₹${toRupees(limitP)}, this bill would add ₹${toRupees(dueP)}.`
+              );
+            }
+          }
+          dueDate = new Date(Date.now() + (customer.paymentTermsDays ?? 30) * 86_400_000);
+        }
+
+        // Next invoice number — taken inside the transaction
+        const invoiceNumber = await this._generateInvoiceNumber(session);
+
+        // Create the Sale document within the transaction
+        const [created] = await Sale.create(
+          [
+            {
+              invoiceNumber,
+              customer: customerId || null,
+              cashier: cashierUser._id,
+              items: saleItems,
+              subtotal,
+              taxTotal,
+              discountTotal,
+              loyaltyTier,
+              loyaltyDiscountPercent: loyaltyPercent,
+              loyaltyDiscountTotal,
+              grandTotal,
+              taxableTotal: toRupees(taxableP),
+              cgstTotal: toRupees(cgstP),
+              sgstTotal: toRupees(sgstP),
+              igstTotal: toRupees(igstP),
+              pricesIncludeTax: pricing.taxInclusive,
+              interState,
+              placeOfSupply: placeOfSupply ?? { code: "", name: "" },
+              seller: {
+                legalName: store.legalName,
+                tradeName: store.tradeName,
+                gstin: store.gstin,
+                stateCode: store.stateCode,
+                address: store.address,
+                phone: store.phone,
+                email: store.email,
+                bankDetails: store.bankDetails,
+                invoiceTerms: store.invoiceTerms,
+              },
+              buyer: customer
+                ? {
+                    name: customer.name,
+                    gstin: customer.gstin || "",
+                    stateCode: buyerState,
+                    address: [customer.address?.street, customer.address?.city, customer.address?.state, customer.address?.pincode]
+                      .filter(Boolean)
+                      .join(", "),
+                    phone: customer.phone || "",
+                  }
+                : { name: "", gstin: "", stateCode: "", address: "", phone: "" },
+              paymentMethod,
+              paidAtSale: toRupees(paidP),
+              amountPaid: toRupees(paidP),
+              balanceDue: toRupees(dueP),
+              dueDate,
+              paymentStatus: dueP === 0 ? "PAID" : paidP === 0 ? "UNPAID" : "PARTIAL",
+              notes,
+            },
+          ],
+          { session }
+        );
+        sale = created;
+
+        // Update customer loyalty if not a walk-in
+        if (customerId) {
+            const loyaltyPoints = pointsForPaise(grandP);
+
+            // Pipeline update so the running ₹ total is re-rounded to 2 decimals
+            // on every sale — a plain $inc lets float error pile up over time.
+            await Customer.updateOne(
+              { _id: customerId },
+              [
+                {
+                  $set: {
+                    totalPurchases: {
+                      $round: [{ $add: [{ $ifNull: ["$totalPurchases", 0] }, grandTotal] }, 2],
+                    },
+                    loyaltyPoints: { $add: [{ $ifNull: ["$loyaltyPoints", 0] }, loyaltyPoints] },
+                    outstanding: {
+                      $round: [{ $add: [{ $ifNull: ["$outstanding", 0] }, toRupees(dueP)] }, 2],
+                    },
+                  },
+                },
+              ],
+              { session }
+            );
+
+            if (loyaltyPoints > 0) {
+              await LoyaltyTransaction.create(
+                [{ customer: customerId, sale: sale._id, points: loyaltyPoints, type: "earn" }],
+                { session }
+              );
+            }
+        }
+      });
+    } finally {
+      await session.endSession();
+    }
+    return sale;
+  }
+
 
   /**
    * Get a single sale by ID with populated references.
@@ -331,6 +461,7 @@ class SaleService {
       page,
       limit,
       status,
+      paymentStatus,
       paymentMethod,
       customerId,
       cashierId,
@@ -343,6 +474,7 @@ class SaleService {
     const filter = {};
 
     if (status) filter.status = status;
+    if (paymentStatus) filter.paymentStatus = paymentStatus;
     if (paymentMethod) filter.paymentMethod = paymentMethod;
     if (customerId) filter.customer = customerId;
     if (cashierId) filter.cashier = cashierId;
@@ -392,112 +524,10 @@ class SaleService {
    * 7. Enqueue audit log
    */
   async refund(saleId, userId, reason) {
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
-    try {
-      const sale = await Sale.findById(saleId).session(session);
-      if (!sale) throw ApiError.notFound("Sale not found");
-
-      if (sale.status !== "COMPLETED") {
-        throw ApiError.badRequest(
-          `Cannot refund a sale with status: ${sale.status}`
-        );
-      }
-
-      // Snapshot before state for audit
-      const beforeState = sale.toJSON();
-
-      // Restock all items
-      for (const item of sale.items) {
-        await Product.findByIdAndUpdate(
-          item.product,
-          { $inc: { stock: item.quantity } },
-          { session }
-        );
-      }
-
-      // Reverse customer loyalty
-      // Reverse customer loyalty
-      if (sale.customer) {
-        const earned = await LoyaltyTransaction.findOne({
-          sale: sale._id,
-          type: "earn",
-        }).session(session);
-
-        const customer = await Customer.findById(sale.customer).session(session);
-
-        if (customer) {
-          // Old sales (before the ledger existed) have no earn row, so fall back to the formula
-          const earnedPoints =
-            earned?.points ?? pointsForPaise(Math.round(sale.grandTotal * 100));
-
-          // Never deduct more than the customer currently has
-          const pointsBack = Math.min(earnedPoints, customer.loyaltyPoints);
-          const purchasesBack = roundMoney(Math.min(sale.grandTotal, customer.totalPurchases));
-
-          // Pipeline update: re-round to 2 decimals and never go below 0.
-          await Customer.updateOne(
-            { _id: customer._id },
-            [
-              {
-                $set: {
-                  loyaltyPoints: { $max: [0, { $subtract: ["$loyaltyPoints", pointsBack] }] },
-                  totalPurchases: {
-                    $max: [0, { $round: [{ $subtract: ["$totalPurchases", purchasesBack] }, 2] }],
-                  },
-                },
-              },
-            ],
-            { session }
-          );
-
-          if (pointsBack > 0) {
-            await LoyaltyTransaction.create(
-              [{ customer: customer._id, sale: sale._id, points: -pointsBack, type: "reverse" }],
-              { session }
-            );
-          }
-        }
-      }
-      // Mark sale as refunded
-      sale.status = "REFUNDED";
-      sale.paymentStatus = "REFUNDED";
-      sale.notes = sale.notes
-        ? `${sale.notes} | REFUND: ${reason}`
-        : `REFUND: ${reason}`;
-      await sale.save({ session });
-
-      await session.commitTransaction();
-
-      logger.info(`Refund processed: ${sale.invoiceNumber}`, {
-        saleId: sale._id,
-        grandTotal: sale.grandTotal,
-        reason,
-      });
-
-      // Enqueue audit log
-      await addJob(QUEUE_NAMES.AUDIT_LOG, "refund-audit", {
-        action: "REFUND",
-        entity: "Sale",
-        entityId: sale._id.toString(),
-        userId: userId.toString(),
-        before: beforeState,
-        after: sale.toJSON(),
-        metadata: { reason, invoiceNumber: sale.invoiceNumber },
-      });
-
-      return sale;
-    } catch (error) {
-      await session.abortTransaction();
-      logger.error("Refund failed — transaction rolled back", {
-        error: error.message,
-        saleId,
-      });
-      throw error;
-    } finally {
-      session.endSession();
-    }
+    // A full refund is a return of everything not yet returned: it issues a
+    // credit note, restocks, and reverses loyalty — see return.service.js.
+    const { sale } = await returnService.returnAll(saleId, userId, reason);
+    return sale;
   }
 
   /**
@@ -529,7 +559,7 @@ class SaleService {
       {
         $match: {
           createdAt: { $gte: startOfDay, $lt: endOfDay },
-          status: "COMPLETED",
+          status: { $in: REVENUE_STATUSES },
         },
       },
       {
@@ -538,7 +568,8 @@ class SaleService {
             {
               $group: {
                 _id: null,
-                totalRevenue: { $sum: "$grandTotal" },
+                // Net of returns (credit notes) on these sales
+                totalRevenue: { $sum: NET_SALE_VALUE },
                 totalTax: { $sum: "$taxTotal" },
                 totalDiscount: { $sum: "$discountTotal" },
                 saleCount: { $sum: 1 },
@@ -563,7 +594,7 @@ class SaleService {
             },
           ],
           byPaymentMethod: [
-            { $group: { _id: "$paymentMethod", count: { $sum: 1 }, total: { $sum: "$grandTotal" } } },
+            { $group: { _id: "$paymentMethod", count: { $sum: 1 }, total: { $sum: NET_SALE_VALUE } } },
             { $sort: { total: -1 } },
           ],
           topProducts: [
@@ -572,8 +603,23 @@ class SaleService {
               $group: {
                 _id: "$items.sku",
                 name: { $first: "$items.name" },
-                totalQuantity: { $sum: "$items.quantity" },
-                totalRevenue: { $sum: "$items.lineTotal" },
+                totalQuantity: {
+                  $sum: { $subtract: ["$items.quantity", { $ifNull: ["$items.returnedQuantity", 0] }] },
+                },
+                // Line value for the units kept (not returned)
+                totalRevenue: {
+                  $sum: {
+                    $multiply: [
+                      "$items.lineTotal",
+                      {
+                        $divide: [
+                          { $subtract: ["$items.quantity", { $ifNull: ["$items.returnedQuantity", 0] }] },
+                          "$items.quantity",
+                        ],
+                      },
+                    ],
+                  },
+                },
               },
             },
             { $sort: { totalQuantity: -1 } },
@@ -583,10 +629,12 @@ class SaleService {
           dailyBreakdown: [
             {
               $group: {
+                // Bucket by the store's calendar day (IST), not UTC, so a
+                // sale at 1am counts towards that day on the chart.
                 _id: {
-                  $dateToString: { format: "%Y-%m-%d", date: "$createdAt" },
+                  $dateToString: { format: "%Y-%m-%d", date: "$createdAt", timezone: "Asia/Kolkata" },
                 },
-                revenue: { $sum: "$grandTotal" },
+                revenue: { $sum: NET_SALE_VALUE },
                 orders: { $sum: 1 },
               },
             },

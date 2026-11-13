@@ -41,11 +41,14 @@ export const checkoutSchema = z.object({
     .regex(/^[a-fA-F0-9]{24}$/, "customerId must be a valid MongoDB ObjectId")
     .optional()
     .nullable(),
-  paymentMethod: z.enum(["CASH", "CARD", "UPI", "OTHER"], {
+  // CREDIT = whole bill on credit. For a part-paid bill, send how the paid
+  // part was paid plus amountPaid.
+  paymentMethod: z.enum(["CASH", "CARD", "UPI", "OTHER", "CREDIT"], {
     errorMap: () => ({
-      message: "Payment method must be one of: CASH, CARD, UPI, OTHER",
+      message: "Payment method must be one of: CASH, CARD, UPI, OTHER, CREDIT",
     }),
   }),
+  amountPaid: z.coerce.number().min(0, "Amount paid cannot be negative").optional(),
   notes: z
     .string()
     .trim()
@@ -58,7 +61,8 @@ export const checkoutSchema = z.object({
 export const saleQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
-  status: z.enum(["COMPLETED", "REFUNDED", "VOID"]).optional(),
+  status: z.enum(["COMPLETED", "PARTIALLY_RETURNED", "REFUNDED", "VOID"]).optional(),
+  paymentStatus: z.enum(["PAID", "PARTIAL", "UNPAID", "REFUNDED"]).optional(),
   paymentMethod: z.enum(["CASH", "CARD", "UPI", "OTHER"]).optional(),
   customerId: z
     .string()

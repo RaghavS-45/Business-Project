@@ -34,6 +34,7 @@ import {
 import { Plus, Search, MoreHorizontal, Pencil, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
 import ProductForm from "@/components/products/ProductForm";
 import { toast } from "sonner";
+import { formatPrice } from "@/lib/pricing";
 
 const CATEGORIES = [
   "All",
@@ -87,8 +88,8 @@ export default function ProductsPage() {
     if (stock === 0)
       return <Badge variant="destructive" className="text-[10px]">Out of stock</Badge>;
     if (stock <= threshold)
-      return <Badge className="text-[10px] bg-amber-500/10 text-amber-400 border-amber-500/20">Low: {stock}</Badge>;
-    return <Badge variant="outline" className="text-[10px] text-emerald-400 border-emerald-500/20">{stock}</Badge>;
+      return <Badge className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">Low: {stock}</Badge>;
+    return <Badge variant="outline" className="text-[10px] text-emerald-600 dark:text-emerald-400 border-emerald-500/20">{stock}</Badge>;
   };
 
   return (
@@ -147,7 +148,7 @@ export default function ProductsPage() {
       </div>
 
       {/* Table */}
-      <div className="rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
+      <div className="rounded-xl border border-border/50 bg-card overflow-hidden">
         {isLoading ? (
           <div className="p-6 space-y-3">
             {Array.from({ length: 8 }).map((_, i) => (
@@ -176,6 +177,7 @@ export default function ProductsPage() {
                   category: string;
                   costPrice: number;
                   sellingPrice: number;
+                  taxRate?: number;
                   stock: number;
                   lowStockThreshold: number;
                   unit: string;
@@ -196,10 +198,11 @@ export default function ProductsPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right text-xs text-muted-foreground">
-                      ₹{product.costPrice.toLocaleString("en-IN")}
+                      {formatPrice(product.costPrice)}
                     </TableCell>
                     <TableCell className="text-right text-sm font-medium">
-                      ₹{product.sellingPrice.toLocaleString("en-IN")}
+                      {formatPrice(product.sellingPrice)}
+                      <p className="text-[11px] font-normal text-muted-foreground">GST {product.taxRate ?? 0}%</p>
                     </TableCell>
                     <TableCell className="text-center">
                       {stockBadge(product.stock, product.lowStockThreshold)}

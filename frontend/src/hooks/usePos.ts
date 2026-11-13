@@ -21,6 +21,7 @@ export function useCheckout() {
       }>;
       customerId?: string | null;
       paymentMethod: string;
+      amountPaid?: number;
       notes?: string;
     }) => {
       const { data } = await api.post("/sales/checkout", payload);
@@ -30,6 +31,8 @@ export function useCheckout() {
       clearCart();
       queryClient.invalidateQueries({ queryKey: ["products"] });
       queryClient.invalidateQueries({ queryKey: ["sales"] });
+      queryClient.invalidateQueries({ queryKey: ["customers"] });
+      queryClient.invalidateQueries({ queryKey: ["receivables"] });
     },
   });
 }

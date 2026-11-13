@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { format } from "date-fns";
 import api from "@/lib/axios";
 
 /**
@@ -12,8 +13,10 @@ export function useDailySummary(range?: DateRange) {
     queryFn: async () => {
       const params: Record<string, string> = {};
       if (range) {
-        params.date = range.from.toISOString().split("T")[0];
-        params.endDate = range.to.toISOString().split("T")[0];
+        // Local calendar dates — toISOString() would shift to UTC and,
+        // in India before 5:30am, ask for the previous day.
+        params.date = format(range.from, "yyyy-MM-dd");
+        params.endDate = format(range.to, "yyyy-MM-dd");
       }
       const { data } = await api.get("/sales/summary/daily", { params });
       return data.data.summary;

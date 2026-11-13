@@ -11,70 +11,97 @@ import {
   ChevronRight,
   UserCog,
   ClipboardList,
+  Settings,
+  Wallet,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Badge } from "@/components/ui/badge";
 
 interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
+  /** Rendered inside the mobile drawer: fills it, no collapse button. */
+  mobile?: boolean;
+  onNavigate?: () => void;
 }
+
+const SECTIONS = ["Overview", "Sell", "Inventory", "Admin"] as const;
 
 const navItems = [
   {
     label: "Dashboard",
+    section: "Overview",
     icon: LayoutDashboard,
     path: "/",
     roles: ["ADMIN", "MANAGER"],
   },
   {
     label: "Products",
+    section: "Inventory",
     icon: Package,
     path: "/products",
     roles: ["ADMIN", "MANAGER"],
   },
   {
     label: "POS Terminal",
+    section: "Sell",
     icon: ShoppingCart,
     path: "/pos",
     roles: ["ADMIN", "MANAGER", "CASHIER"],
-    highlight: true,
   },
   {
     label: "Sales",
+    section: "Sell",
     icon: Receipt,
     path: "/sales",
     roles: ["ADMIN", "MANAGER"],
   },
   {
     label: "Customers",
+    section: "Sell",
     icon: Users,
     path: "/customers",
     roles: ["ADMIN", "MANAGER", "CASHIER"],
   },
   {
+    label: "Dues",
+    section: "Sell",
+    icon: Wallet,
+    path: "/receivables",
+    roles: ["ADMIN", "MANAGER"],
+  },
+  {
     label: "Vendors",
+    section: "Inventory",
     icon: Truck,
     path: "/vendors",
     roles: ["ADMIN", "MANAGER"],
   },
   {
     label: "Purchase Orders",
+    section: "Inventory",
     icon: ClipboardList,
     path: "/purchase-orders",
     roles: ["ADMIN", "MANAGER"],
   },
   {
     label: "Team",
-    icon: UserCog,  // import from lucide-react
+    section: "Admin",
+    icon: UserCog,
     path: "/users",
+    roles: ["ADMIN"],
+  },
+  {
+    label: "Store Settings",
+    section: "Admin",
+    icon: Settings,
+    path: "/settings",
     roles: ["ADMIN"],
   },
 ];
 
-export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
+export default function Sidebar({ collapsed, onToggle, mobile, onNavigate }: SidebarProps) {
   const user = useAuthStore((s) => s.user);
   const location = useLocation();
 
@@ -85,8 +112,11 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
   return (
     <aside
       className={cn(
-        "fixed inset-y-0 left-0 z-30 flex flex-col border-r border-border/50 bg-sidebar transition-all duration-300 ease-in-out",
-        collapsed ? "w-[68px]" : "w-[240px]"
+        "flex flex-col bg-sidebar",
+        mobile
+          ? "h-full w-full"
+          : "fixed inset-y-0 left-0 z-30 border-r border-border/50 transition-[width] duration-300 ease-in-out",
+        !mobile && (collapsed ? "w-[68px]" : "w-[240px]")
       )}
     >
       {/* Logo */}
@@ -100,8 +130,8 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
               <span className="truncate text-sm font-bold tracking-tight text-foreground">
                 Inventory POS
               </span>
-              <span className="truncate text-[10px] text-muted-foreground">
-                Management System
+              <span className="truncate text-[11px] text-muted-foreground">
+                Store management
               </span>
             </div>
           )}
@@ -109,64 +139,70 @@ export default function Sidebar({ collapsed, onToggle }: SidebarProps) {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-        {visibleItems.map((item) => {
-          const isActive =
-            item.path === "/"
-              ? location.pathname === "/"
-              : location.pathname.startsWith(item.path);
+      <nav className="flex-1 overflow-y-auto px-3 py-4">
+        {SECTIONS.filter((section) => visibleItems.some((item) => item.section === section)).map((section, sectionIndex) => {
+          const items = visibleItems.filter((item) => item.section === section);
+          return (
+            <div key={section} className={cn(sectionIndex > 0 && "mt-5")}>
+              {collapsed ? (
+                sectionIndex > 0 && <div className="mx-2 mb-3 h-px bg-border/60" />
+              ) : (
+                <p className="mb-1.5 px-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">
+                  {section}
+                </p>
+              )}
+              <div className="space-y-0.5">
+                {items.map((item) => {
+                  const isActive =
+                    item.path === "/"
+                      ? location.pathname === "/"
+                      : location.pathname.startsWith(item.path);
 
-          const link = (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              className={cn(
-                "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200",
-                isActive
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm"
-                  : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground"
-              )}
-            >
-              {isActive && (
-                <div className="absolute left-0 top-1/2 -translate-y-1/2 h-6 w-[3px] rounded-r-full bg-gradient-to-b from-blue-500 to-blue-600" />
-              )}
-              <item.icon
-                className={cn(
-                  "h-5 w-5 shrink-0 transition-colors",
-                  isActive ? "text-blue-400" : "text-muted-foreground group-hover:text-foreground"
-                )}
-              />
-              {!collapsed && (
-                <span className="truncate">{item.label}</span>
-              )}
-              {!collapsed && item.highlight && (
-                <Badge
-                  variant="secondary"
-                  className="ml-auto text-[10px] px-1.5 py-0 bg-blue-500/10 text-blue-400 border-blue-500/20"
-                >
-                  POS
-                </Badge>
-              )}
-            </NavLink>
+                  const link = (
+                    <NavLink
+                      key={item.path}
+                      to={item.path}
+                      onClick={onNavigate}
+                      aria-label={collapsed ? item.label : undefined}
+                      className={cn(
+                        "group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                        collapsed && "justify-center px-0",
+                        isActive
+                          ? "bg-primary/10 text-primary"
+                          : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                      )}
+                    >
+                      <item.icon
+                        className={cn(
+                          "h-[18px] w-[18px] shrink-0 transition-colors",
+                          isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+                        )}
+                      />
+                      {!collapsed && <span className="truncate">{item.label}</span>}
+                    </NavLink>
+                  );
+
+                  if (collapsed) {
+                    return (
+                      <Tooltip key={item.path} delayDuration={0}>
+                        <TooltipTrigger asChild>{link}</TooltipTrigger>
+                        <TooltipContent side="right" className="font-medium">
+                          {item.label}
+                        </TooltipContent>
+                      </Tooltip>
+                    );
+                  }
+
+                  return link;
+                })}
+              </div>
+            </div>
           );
-
-          if (collapsed) {
-            return (
-              <Tooltip key={item.path} delayDuration={0}>
-                <TooltipTrigger asChild>{link}</TooltipTrigger>
-                <TooltipContent side="right" className="font-medium">
-                  {item.label}
-                </TooltipContent>
-              </Tooltip>
-            );
-          }
-
-          return link;
         })}
       </nav>
 
       {/* Collapse toggle */}
-      <div className="border-t border-border/50 p-3">
+      <div className={cn("border-t border-border/50 p-3", mobile && "hidden")}>
         <Button
           variant="ghost"
           size="sm"

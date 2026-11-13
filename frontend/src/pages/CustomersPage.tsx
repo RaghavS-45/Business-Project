@@ -14,16 +14,24 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, Search, MoreHorizontal, Pencil, Trash2, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { Plus, Search, MoreHorizontal, Pencil, Trash2, ChevronLeft, ChevronRight, Loader2, FileText, Wallet } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { getErrorMessage } from "@/lib/errors";
 import { formatINR } from "@/lib/pricing";
+import StateSelect, { GSTIN_PATTERN } from "@/components/gst/StateSelect";
+import RecordPaymentDialog from "@/components/receivables/RecordPaymentDialog";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuthStore } from "@/stores/authStore";
 
 interface CustomerFormData {
   name: string;
   email?: string;
   phone?: string;
+  gstin?: string;
+  stateCode?: string;
+  creditLimit?: string;
+  paymentTermsDays?: string;
   notes?: string;
 }
 
@@ -32,6 +40,10 @@ export default function CustomersPage() {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Record<string, unknown> | null>(null);
+  const [paying, setPaying] = useState<{ _id: string; name: string } | null>(null);
+  const navigate = useNavigate();
+  const role = useAuthStore((s) => s.user?.role);
+  const canSeeDues = role === "ADMIN" || role === "MANAGER";
 
   const { data, isLoading } = useCustomers({ page, limit: 15, search: search || undefined });
   const createCustomer = useCreateCustomer();
@@ -42,17 +54,42 @@ export default function CustomersPage() {
   const total = data?.total ?? 0;
   const totalPages = data?.pagination?.totalPages ?? (Math.ceil(total / 15) || 1);
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<CustomerFormData>();
+  const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<CustomerFormData>();
+  const gstin = (watch("gstin") || "").toUpperCase();
+  const stateFromGstin = GSTIN_PATTERN.test(gstin) ? gstin.slice(0, 2) : "";
 
-  const openCreate = () => { setEditing(null); reset({ name: "", email: "", phone: "", notes: "" }); setDialogOpen(true); };
+  const openCreate = () => {
+    setEditing(null);
+    reset({ name: "", email: "", phone: "", gstin: "", stateCode: "", creditLimit: "", paymentTermsDays: "30", notes: "" });
+    setDialogOpen(true);
+  };
   const openEdit = (c: Record<string, unknown>) => {
     setEditing(c);
-    reset({ name: c.name as string, email: (c.email as string) || "", phone: (c.phone as string) || "", notes: (c.notes as string) || "" });
+    reset({
+      name: c.name as string,
+      email: (c.email as string) || "",
+      phone: (c.phone as string) || "",
+      gstin: (c.gstin as string) || "",
+      stateCode: (c.stateCode as string) || "",
+      creditLimit: c.creditLimit === null || c.creditLimit === undefined ? "" : String(c.creditLimit),
+      paymentTermsDays: String(c.paymentTermsDays ?? 30),
+      notes: (c.notes as string) || "",
+    });
     setDialogOpen(true);
   };
 
   const onSubmit = (data: CustomerFormData) => {
-    const payload = { ...data, email: data.email || undefined, phone: data.phone || undefined };
+    const payload = {
+      ...data,
+      email: data.email || undefined,
+      phone: data.phone || undefined,
+      // "" clears a GSTIN / state on edit; the GSTIN decides the state
+      gstin: (data.gstin || "").trim().toUpperCase(),
+      stateCode: stateFromGstin || data.stateCode || "",
+      // Blank = no limit
+      creditLimit: data.creditLimit?.trim() ? Number(data.creditLimit) : null,
+      paymentTermsDays: data.paymentTermsDays?.trim() ? Number(data.paymentTermsDays) : 30,
+    };
     if (editing) {
       updateCustomer.mutate({ id: editing._id as string, ...payload }, {
         onSuccess: () => { toast.success("Customer updated"); setDialogOpen(false); },
@@ -94,7 +131,7 @@ export default function CustomersPage() {
         <Input placeholder="Search customers..." value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} className="pl-9" />
       </div>
 
-      <div className="rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
+      <div className="rounded-xl border border-border/50 bg-card overflow-hidden">
         {isLoading ? (
           <div className="p-6 space-y-3">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
         ) : (
@@ -102,35 +139,65 @@ export default function CustomersPage() {
             <TableHeader>
               <TableRow className="border-border/50 bg-muted/30">
                 <TableHead className="text-xs font-semibold">Name</TableHead>
-                <TableHead className="text-xs font-semibold">Email</TableHead>
-                <TableHead className="text-xs font-semibold">Phone</TableHead>
-                <TableHead className="text-xs font-semibold text-right">Loyalty</TableHead>
-                <TableHead className="text-xs font-semibold text-right">Purchases</TableHead>
+                <TableHead className="text-xs font-semibold hidden lg:table-cell">Email</TableHead>
+                <TableHead className="text-xs font-semibold hidden sm:table-cell">Phone</TableHead>
+                <TableHead className="text-xs font-semibold text-right hidden md:table-cell">Loyalty</TableHead>
+                <TableHead className="text-xs font-semibold text-right hidden md:table-cell">Purchases</TableHead>
+                <TableHead className="text-xs font-semibold text-right">Owes</TableHead>
                 <TableHead className="text-xs font-semibold w-10"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {customers.map((c: { _id: string; name: string; email?: string; phone?: string; loyaltyPoints: number; totalPurchases: number }) => (
+              {customers.map((c: { _id: string; name: string; email?: string; phone?: string; gstin?: string; loyaltyPoints: number; totalPurchases: number; outstanding?: number; creditLimit?: number | null }) => (
                 <TableRow key={c._id} className="border-border/30 hover:bg-muted/20">
-                  <TableCell className="font-medium text-sm">{c.name}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{c.email || "—"}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{c.phone || "—"}</TableCell>
-                  <TableCell className="text-right">
-                    <Badge variant="outline" className="text-[10px] text-blue-400 border-blue-500/20">{c.loyaltyPoints} pts</Badge>
+                  <TableCell className="font-medium text-sm">
+                    {c.name}
+                    {c.gstin && (
+                      <p className="mt-0.5 font-mono text-[11px] font-normal text-muted-foreground">GSTIN {c.gstin}</p>
+                    )}
                   </TableCell>
-                  <TableCell className="text-right text-sm font-medium">{formatINR(c.totalPurchases || 0)}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground hidden lg:table-cell">{c.email || "—"}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">{c.phone || "—"}</TableCell>
+                  <TableCell className="text-right hidden md:table-cell">
+                    <Badge variant="outline" className="text-[10px] text-blue-600 dark:text-blue-400 border-blue-500/20">{c.loyaltyPoints} pts</Badge>
+                  </TableCell>
+                  <TableCell className="text-right text-sm font-medium hidden md:table-cell">{formatINR(c.totalPurchases || 0)}</TableCell>
+                  <TableCell className="text-right text-sm tabular-nums">
+                    {(c.outstanding ?? 0) > 0 ? (
+                      canSeeDues ? (
+                        <Link to={`/customers/${c._id}/statement`} className="font-medium text-amber-600 dark:text-amber-400 hover:underline">
+                          {formatINR(c.outstanding ?? 0)}
+                        </Link>
+                      ) : (
+                        <span className="font-medium text-amber-600 dark:text-amber-400">{formatINR(c.outstanding ?? 0)}</span>
+                      )
+                    ) : (
+                      <span className="text-muted-foreground/60">—</span>
+                    )}
+                    {c.creditLimit !== null && c.creditLimit !== undefined && (
+                      <p className="text-[10px] text-muted-foreground">limit {formatINR(c.creditLimit)}</p>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => openEdit(c as unknown as Record<string, unknown>)}><Pencil className="mr-2 h-4 w-4" />Edit</DropdownMenuItem>
+                        {canSeeDues && (
+                          <>
+                            <DropdownMenuItem onClick={() => navigate(`/customers/${c._id}/statement`)}><FileText className="mr-2 h-4 w-4" />Statement</DropdownMenuItem>
+                            {(c.outstanding ?? 0) > 0 && (
+                              <DropdownMenuItem onClick={() => setPaying({ _id: c._id, name: c.name })}><Wallet className="mr-2 h-4 w-4" />Record payment</DropdownMenuItem>
+                            )}
+                          </>
+                        )}
                         <DropdownMenuItem onClick={() => handleDelete(c._id, c.name)} className="text-destructive focus:text-destructive"><Trash2 className="mr-2 h-4 w-4" />Delete</DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
                 </TableRow>
               ))}
-              {customers.length === 0 && <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground">No customers found</TableCell></TableRow>}
+              {customers.length === 0 && <TableRow><TableCell colSpan={7} className="text-center py-12 text-muted-foreground">No customers found</TableCell></TableRow>}
             </TableBody>
           </Table>
         )}
@@ -165,6 +232,65 @@ export default function CustomersPage() {
                 <Input id="c-phone" {...register("phone")} />
               </div>
             </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="c-gstin">GSTIN</Label>
+                <Input
+                  id="c-gstin"
+                  placeholder="For registered businesses"
+                  className={`uppercase font-mono ${errors.gstin ? "border-destructive" : ""}`}
+                  maxLength={15}
+                  {...register("gstin", {
+                    validate: (v) =>
+                      !v || GSTIN_PATTERN.test(v.trim().toUpperCase()) || "Enter a valid 15-character GSTIN",
+                  })}
+                />
+                {errors.gstin && <p className="text-xs text-destructive">{errors.gstin.message}</p>}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="c-state">State</Label>
+                <StateSelect
+                  id="c-state"
+                  value={stateFromGstin || watch("stateCode") || ""}
+                  onChange={(code) => setValue("stateCode", code)}
+                  disabled={!!stateFromGstin}
+                />
+              </div>
+            </div>
+            <p className="-mt-2 text-[11px] text-muted-foreground">
+              Buyers in another state are billed IGST; same state, CGST + SGST. The state is read from the GSTIN.
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="c-limit">Credit limit (₹)</Label>
+                <Input
+                  id="c-limit"
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  step="1"
+                  placeholder="No limit"
+                  {...register("creditLimit", {
+                    validate: (v) => !v || Number(v) >= 0 || "Can't be negative",
+                  })}
+                />
+                <p className="text-[11px] text-muted-foreground">Blank = no limit · 0 = cash only</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="c-terms">Payment terms (days)</Label>
+                <Input
+                  id="c-terms"
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  max={365}
+                  {...register("paymentTermsDays", {
+                    validate: (v) => !v || (Number(v) >= 0 && Number(v) <= 365) || "0–365 days",
+                  })}
+                />
+                {errors.paymentTermsDays && <p className="text-xs text-destructive">{errors.paymentTermsDays.message}</p>}
+              </div>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="c-notes">Notes</Label>
               <Input id="c-notes" {...register("notes")} placeholder="Optional" />
@@ -177,6 +303,7 @@ export default function CustomersPage() {
           </form>
         </DialogContent>
       </Dialog>
+      <RecordPaymentDialog customer={paying} open={!!paying} onOpenChange={(o) => !o && setPaying(null)} />
     </div>
   );
 }

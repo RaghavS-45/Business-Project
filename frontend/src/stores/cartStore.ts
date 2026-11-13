@@ -2,6 +2,8 @@ import { create } from "zustand";
 import { getTier } from "@/lib/loyalty";
 import { priceCart, priceLine, pointsForPaise, toRupees } from "@/lib/pricing";
 
+export type PaymentMethod = "CASH" | "CARD" | "UPI" | "OTHER" | "CREDIT";
+
 export interface CartItem {
   product: string; // product _id
   name: string;
@@ -20,24 +22,30 @@ interface CartState {
   selectedCustomer: string | null;
   customerName: string | null;
   customerLoyaltyPoints: number;
-  paymentMethod: "CASH" | "CARD" | "UPI" | "OTHER";
+  paymentMethod: PaymentMethod;
   notes: string;
+  /** Store setting: selling prices already include GST. */
+  taxInclusive: boolean;
 
   // Actions
-  addItem: (item: Omit<CartItem, "quantity" | "discountPercent" | "taxPercent">) => void;
+  /** taxPercent is the product's GST rate (defaults to 0). */
+  addItem: (item: Omit<CartItem, "quantity" | "discountPercent" | "taxPercent"> & { taxPercent?: number }) => void;
   removeItem: (productId: string) => void;
   updateQuantity: (productId: string, quantity: number) => void;
   updateDiscount: (productId: string, discountPercent: number) => void;
   updateTax: (productId: string, taxPercent: number) => void;
   setCustomer: (customerId: string | null, customerName?: string | null, loyaltyPoints?: number) => void;
   
-  setPaymentMethod: (method: "CASH" | "CARD" | "UPI" | "OTHER") => void;
+  setPaymentMethod: (method: PaymentMethod) => void;
   setNotes: (notes: string) => void;
+  setTaxInclusive: (taxInclusive: boolean) => void;
   clearCart: () => void;
 
   // Computed
   getSubtotal: () => number;
   getTaxTotal: () => number;
+  /** Value GST is charged on (after discounts). */
+  getTaxableTotal: () => number;
   getDiscountTotal: () => number;
   getGrandTotal: () => number;
   getLoyaltyPercent: () => number;        
@@ -48,10 +56,13 @@ interface CartState {
 }
 
 /** Price the whole cart with the same paise-based maths the server uses. */
-const priceState = (state: Pick<CartState, "items" | "selectedCustomer" | "customerLoyaltyPoints">) =>
+const priceState = (
+  state: Pick<CartState, "items" | "selectedCustomer" | "customerLoyaltyPoints" | "taxInclusive">
+) =>
   priceCart(
     state.items,
-    state.selectedCustomer ? getTier(state.customerLoyaltyPoints).discount : 0
+    state.selectedCustomer ? getTier(state.customerLoyaltyPoints).discount : 0,
+    { taxInclusive: state.taxInclusive }
   );
 
 export const useCartStore = create<CartState>()((set, get) => ({
@@ -61,6 +72,7 @@ export const useCartStore = create<CartState>()((set, get) => ({
   customerLoyaltyPoints: 0,
   paymentMethod: "CASH",
   notes: "",
+  taxInclusive: false,
 
   addItem: (item) =>
     set((state) => {
@@ -77,7 +89,7 @@ export const useCartStore = create<CartState>()((set, get) => ({
       return {
         items: [
           ...state.items,
-          { ...item, quantity: 1, discountPercent: 0, taxPercent: 0 },
+          { ...item, quantity: 1, discountPercent: 0, taxPercent: item.taxPercent ?? 0 },
         ],
       };
     }),
@@ -125,6 +137,8 @@ export const useCartStore = create<CartState>()((set, get) => ({
 
   setNotes: (notes) => set({ notes }),
 
+  setTaxInclusive: (taxInclusive) => set({ taxInclusive }),
+
   clearCart: () =>
     set({
       items: [],
@@ -149,6 +163,8 @@ export const useCartStore = create<CartState>()((set, get) => ({
 
   getTaxTotal: () => toRupees(priceState(get()).tax),
 
+  getTaxableTotal: () => toRupees(priceState(get()).taxable),
+
   getGrandTotal: () => toRupees(priceState(get()).grandTotal),
 
   getPointsToEarn: () => {
@@ -158,6 +174,8 @@ export const useCartStore = create<CartState>()((set, get) => ({
 
   getLineTotal: (productId) => {
     const item = get().items.find((i) => i.product === productId);
-    return item ? toRupees(priceLine(item, get().getLoyaltyPercent()).total) : 0;
+    return item
+      ? toRupees(priceLine(item, get().getLoyaltyPercent(), { taxInclusive: get().taxInclusive }).total)
+      : 0;
   },
 }));

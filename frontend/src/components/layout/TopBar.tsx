@@ -12,7 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { LogOut, Moon, Sun, Menu } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useTheme } from "@/hooks/useTheme";
 
 interface TopBarProps {
   onMenuClick: () => void;
@@ -22,21 +22,8 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
   const user = useAuthStore((s) => s.user);
   const firstName = user?.name?.trim().split(" ")[0];
   const logoutMutation = useLogout();
-  const [isDark, setIsDark] = useState(true);
-
-  useEffect(() => {
-    const root = document.documentElement;
-    if (isDark) {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
-    }
-  }, [isDark]);
-
-  // Initialize dark mode
-  useEffect(() => {
-    document.documentElement.classList.add("dark");
-  }, []);
+  const { theme, toggle } = useTheme();
+  const isDark = theme === "dark";
 
   const initials = user?.name
     ?.split(" ")
@@ -46,9 +33,9 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
     .slice(0, 2) || "??";
 
   const roleColors: Record<string, string> = {
-    ADMIN: "bg-red-500/10 text-red-400 border-red-500/20",
-    MANAGER: "bg-amber-500/10 text-amber-400 border-amber-500/20",
-    CASHIER: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+    ADMIN: "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20",
+    MANAGER: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+    CASHIER: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
   };
 
   return (
@@ -59,6 +46,7 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
           size="icon"
           className="lg:hidden"
           onClick={onMenuClick}
+          aria-label="Open menu"
         >
           <Menu className="h-5 w-5" />
         </Button>
@@ -68,7 +56,7 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
             Welcome back{firstName ? `, ${firstName}` : ""}
           </h2>
           <p className="text-xs text-muted-foreground">
-            {new Date().toLocaleDateString("en-US", {
+            {new Date().toLocaleDateString("en-IN", {
               weekday: "long",
               year: "numeric",
               month: "long",
@@ -83,7 +71,9 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => setIsDark(!isDark)}
+          onClick={toggle}
+          aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+          title={isDark ? "Light mode" : "Dark mode"}
           className="text-muted-foreground hover:text-foreground"
         >
           {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}

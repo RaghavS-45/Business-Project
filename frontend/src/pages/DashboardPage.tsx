@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import {
   useDailySummary,
   useLowStockProducts,
@@ -7,7 +8,9 @@ import {
   type DateRange,
 } from "@/hooks/useDashboard";
 import KpiCard from "@/components/dashboard/KpiCard";
-import RevenueChart from "@/components/dashboard/RevenueChart";
+import RevenueChart, { type RevenuePoint } from "@/components/dashboard/RevenueChart";
+import StatusBadge from "@/components/sales/StatusBadge";
+import { formatINR } from "@/lib/pricing";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -22,7 +25,7 @@ import {
   IndianRupee, ShoppingCart, AlertTriangle,
   Package, CalendarIcon, X,
 } from "lucide-react";
-import { format, subDays, startOfDay, endOfDay } from "date-fns";
+import { format, subDays, startOfDay, endOfDay, eachDayOfInterval, isSameDay, formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 
 import AiInsightsCard from "@/components/dashboard/AiInsightsCard";
@@ -40,6 +43,13 @@ export default function DashboardPage() {
   const [tempFrom, setTempFrom] = useState<Date | null>(null);
 
   const { data: summary, isLoading: summaryLoading } = useDailySummary(dateRange);
+
+  // The chart always shows a trend: the selected range when it spans
+  // several days, otherwise the last 7 days.
+  const [last7] = useState(() => ({ from: startOfDay(subDays(new Date(), 6)), to: endOfDay(new Date()) }));
+  const trendRange =
+    dateRange && !isSameDay(dateRange.from, dateRange.to) ? dateRange : last7;
+  const { data: trend, isLoading: trendLoading } = useDailySummary(trendRange);
   const { data: lowStock, isLoading: lowStockLoading } = useLowStockProducts();
   const { data: recentSales, isLoading: salesLoading } = useRecentSales();
   const { data: stats, isLoading: statsLoading } = useProductStats();
@@ -47,13 +57,24 @@ export default function DashboardPage() {
   const formatCurrency = (v: number) =>
     `₹${(v || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 
-  // Build chart data from dailyBreakdown or fall back to today
-  const chartData = summary?.dailyBreakdown?.length
-    ? summary.dailyBreakdown.map((d: { _id: string; revenue: number }) => ({
-      date: format(new Date(d._id), "dd MMM"),
-      revenue: d.revenue,
-    }))
-    : [{ date: format(new Date(), "dd MMM"), revenue: summary?.totalRevenue || 0 }];
+  // One point per day, with zero-revenue days filled in
+  const byDay = new Map<string, { revenue: number; orders: number }>(
+    (trend?.dailyBreakdown ?? []).map((d: { _id: string; revenue: number; orders: number }) => [
+      d._id,
+      { revenue: d.revenue, orders: d.orders },
+    ])
+  );
+  const chartData: RevenuePoint[] = eachDayOfInterval({
+    start: trendRange.from,
+    end: trendRange.to,
+  }).map((day) => {
+    const hit = byDay.get(format(day, "yyyy-MM-dd"));
+    return { label: format(day, "dd MMM"), revenue: hit?.revenue ?? 0, orders: hit?.orders ?? 0 };
+  });
+  const chartTitle =
+    trendRange === last7
+      ? "Revenue · last 7 days"
+      : `Revenue · ${format(trendRange.from, "dd MMM")} – ${format(trendRange.to, "dd MMM")}`;
 
   const handleDayClick = (day: Date) => {
     if (selecting === "from") {
@@ -111,7 +132,7 @@ export default function DashboardPage() {
                 size="sm"
                 className={cn(
                   "text-xs h-8 gap-2",
-                  dateRange && "border-blue-500/50 text-blue-400"
+                  dateRange && "border-blue-500/50 text-blue-600 dark:text-blue-400"
                 )}
               >
                 <CalendarIcon className="h-3.5 w-3.5" />
@@ -148,7 +169,7 @@ export default function DashboardPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         {summaryLoading || statsLoading ? (
           Array.from({ length: 4 }).map((_, i) => (
             <Skeleton key={i} className="h-[120px] rounded-xl" />
@@ -158,47 +179,49 @@ export default function DashboardPage() {
             <KpiCard
               title={dateRange ? "Period Revenue" : "Today's Revenue"}
               value={formatCurrency(summary?.totalRevenue || 0)}
-              icon={<IndianRupee className="h-5 w-5" />}
-              subtitle={`${summary?.saleCount || 0} transactions`}
+              icon={<IndianRupee />}
+              tone="emerald"
+              subtitle={`${summary?.saleCount || 0} transaction${summary?.saleCount === 1 ? "" : "s"}`}
             />
             <KpiCard
               title={dateRange ? "Orders in Period" : "Orders Today"}
               value={summary?.saleCount || 0}
-              icon={<ShoppingCart className="h-5 w-5" />}
-              subtitle={`Avg: ${formatCurrency(summary?.avgOrderValue || 0)}`}
+              icon={<ShoppingCart />}
+              tone="blue"
+              subtitle={`Avg order ${formatCurrency(summary?.avgOrderValue || 0)}`}
             />
             <KpiCard
               title="Low Stock Items"
               value={lowStock?.length || 0}
-              icon={<AlertTriangle className="h-5 w-5" />}
-              subtitle="Need restocking"
-              className={
-                (lowStock?.length || 0) > 0
-                  ? "border-amber-500/30 hover:border-amber-500/50"
-                  : ""
-              }
+              icon={<AlertTriangle />}
+              tone="amber"
+              subtitle={(lowStock?.length || 0) > 0 ? "Need restocking" : "All stocked up"}
             />
             <KpiCard
               title="Total Products"
               value={stats?.total || 0}
-              icon={<Package className="h-5 w-5" />}
-              subtitle="Active catalog"
+              icon={<Package />}
+              tone="violet"
+              subtitle="In your catalogue"
             />
           </>
         )}
       </div>
 
-       <AiInsightsCard range={dateRange} />
+      <AiInsightsCard range={dateRange} />
 
       {/* Charts + Tables */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <RevenueChart data={chartData} isLoading={summaryLoading} />
+        <RevenueChart data={chartData} title={chartTitle} isLoading={trendLoading} />
 
-        <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
-          <CardHeader className="pb-2">
+        <Card className="border-border/50 bg-card">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Recent Sales
             </CardTitle>
+            <Link to="/sales" className="text-xs font-medium text-primary hover:underline">
+              View all
+            </Link>
           </CardHeader>
           <CardContent>
             {salesLoading ? (
@@ -212,7 +235,7 @@ export default function DashboardPage() {
                 <TableHeader>
                   <TableRow className="border-border/50">
                     <TableHead className="text-xs">Invoice</TableHead>
-                    <TableHead className="text-xs">Amount</TableHead>
+                    <TableHead className="text-xs text-right">Amount</TableHead>
                     <TableHead className="text-xs">Payment</TableHead>
                     <TableHead className="text-xs">Status</TableHead>
                   </TableRow>
@@ -221,24 +244,24 @@ export default function DashboardPage() {
                   {(recentSales?.sales || recentSales?.docs || [])
                     .slice(0, 5)
                     .map((sale: {
-                      _id: string; invoiceNumber: string;
+                      _id: string; invoiceNumber: string; createdAt: string;
                       grandTotal: number; paymentMethod: string; status: string;
                     }) => (
                       <TableRow key={sale._id} className="border-border/30">
-                        <TableCell className="text-xs font-mono">{sale.invoiceNumber}</TableCell>
-                        <TableCell className="text-xs font-medium">{formatCurrency(sale.grandTotal)}</TableCell>
+                        <TableCell>
+                          <p className="text-xs font-mono">{sale.invoiceNumber}</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {formatDistanceToNow(new Date(sale.createdAt), { addSuffix: true })}
+                          </p>
+                        </TableCell>
+                        <TableCell className="text-sm font-medium text-right tabular-nums">{formatINR(sale.grandTotal)}</TableCell>
                         <TableCell>
                           <Badge variant="outline" className="text-[10px] font-medium">
                             {sale.paymentMethod}
                           </Badge>
                         </TableCell>
                         <TableCell>
-                          <Badge
-                            variant={sale.status === "COMPLETED" ? "default" : "destructive"}
-                            className="text-[10px]"
-                          >
-                            {sale.status}
-                          </Badge>
+                          <StatusBadge status={sale.status} />
                         </TableCell>
                       </TableRow>
                     ))}
@@ -258,12 +281,15 @@ export default function DashboardPage() {
 
       {/* Low Stock Alerts */}
       {!lowStockLoading && (lowStock?.length || 0) > 0 && (
-        <Card className="border-amber-500/20 bg-card/50 backdrop-blur-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-amber-400 flex items-center gap-2">
+        <Card className="border-amber-500/20 bg-card">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-sm font-medium text-amber-600 dark:text-amber-400 flex items-center gap-2">
               <AlertTriangle className="h-4 w-4" />
               Low Stock Alerts
             </CardTitle>
+            <Link to="/products" className="text-xs font-medium text-primary hover:underline">
+              Manage products
+            </Link>
           </CardHeader>
           <CardContent>
             <Table>
@@ -284,9 +310,16 @@ export default function DashboardPage() {
                     <TableCell className="text-sm font-medium">{product.name}</TableCell>
                     <TableCell className="text-xs font-mono text-muted-foreground">{product.sku}</TableCell>
                     <TableCell>
-                      <Badge variant="destructive" className="text-[10px] font-mono">
-                        {product.stock}
-                      </Badge>
+                      <span
+                        className={cn(
+                          "inline-flex rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums",
+                          product.stock === 0
+                            ? "bg-red-500/10 text-red-700 dark:text-red-400"
+                            : "bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                        )}
+                      >
+                        {product.stock === 0 ? "Out of stock" : `${product.stock} left`}
+                      </span>
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {product.lowStockThreshold}

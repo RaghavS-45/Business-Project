@@ -19,6 +19,9 @@ import dlqRoutes from "./routes/dlq.routes.js";
 import userRoutes from "./routes/user.routes.js";
 import purchaseOrderRoutes from "./routes/purchaseOrder.routes.js";
 import aiRoutes from "./routes/ai.routes.js";
+import settingsRoutes from "./routes/settings.routes.js";
+import creditNoteRoutes from "./routes/creditNote.routes.js";
+import receivableRoutes from "./routes/receivable.routes.js";
 
 /**
  * Express Application
@@ -133,6 +136,9 @@ app.use("/api/admin/dlq", dlqRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/purchase-orders", purchaseOrderRoutes);
 app.use("/api/ai", aiRoutes);
+app.use("/api/settings", settingsRoutes);
+app.use("/api/credit-notes", creditNoteRoutes);
+app.use("/api/receivables", receivableRoutes);
 
 // ─── 404 Handler ──────────────────────────────────────────
 app.use((_req, res) => {

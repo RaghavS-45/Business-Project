@@ -49,6 +49,7 @@ import {
 import { toast } from "sonner";
 import PurchaseOrderForm from "@/components/purchaseOrders/PurchaseOrderForm";
 import PurchaseOrderDetail from "../components/purchaseOrders/PurchaseOrderDetail";
+import { formatPrice } from "@/lib/pricing";
 
 type POStatus = "all" | "pending" | "approved" | "received" | "rejected";
 
@@ -63,11 +64,11 @@ const STATUS_OPTIONS: { label: string; value: POStatus }[] = [
 function statusBadge(status: string) {
   switch (status) {
     case "pending":
-      return <Badge className="text-[10px] bg-amber-500/10 text-amber-400 border-amber-500/20">Pending</Badge>;
+      return <Badge className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">Pending</Badge>;
     case "approved":
-      return <Badge className="text-[10px] bg-blue-500/10 text-blue-400 border-blue-500/20">Approved</Badge>;
+      return <Badge className="text-[10px] bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20">Approved</Badge>;
     case "received":
-      return <Badge className="text-[10px] bg-emerald-500/10 text-emerald-400 border-emerald-500/20">Received</Badge>;
+      return <Badge className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">Received</Badge>;
     case "rejected":
       return <Badge variant="destructive" className="text-[10px]">Rejected</Badge>;
     default:
@@ -176,7 +177,7 @@ export default function PurchaseOrdersPage() {
       </div>
 
       {/* Table */}
-      <div className="rounded-xl border border-border/50 bg-card/50 backdrop-blur-sm overflow-hidden">
+      <div className="rounded-xl border border-border/50 bg-card overflow-hidden">
         {isLoading ? (
           <div className="p-6 space-y-3">
             {Array.from({ length: 8 }).map((_, i) => (
@@ -223,9 +224,9 @@ export default function PurchaseOrdersPage() {
                     </TableCell>
                     <TableCell>{statusBadge(po.status)}</TableCell>
                     <TableCell className="text-right text-sm font-medium">
-                        ₹{po.items
-                          .reduce((sum, i) => sum + i.quantity * i.unitCost, 0)
-                          .toLocaleString("en-IN")}
+                        {formatPrice(
+                          po.items.reduce((sum, i) => sum + i.quantity * i.unitCost, 0)
+                        )}
                         </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {new Date(po.createdAt).toLocaleDateString("en-IN", {
@@ -254,7 +255,7 @@ export default function PurchaseOrdersPage() {
                               <DropdownMenuItem
                                 onClick={() => handleStatusChange(po._id, "approved", po.poNumber)}
                               >
-                                <CheckCircle className="mr-2 h-4 w-4 text-blue-400" />
+                                <CheckCircle className="mr-2 h-4 w-4 text-blue-600 dark:text-blue-400" />
                                 Approve
                               </DropdownMenuItem>
                               <DropdownMenuItem
@@ -270,7 +271,7 @@ export default function PurchaseOrdersPage() {
                             <DropdownMenuItem
                               onClick={() => handleStatusChange(po._id, "received", po.poNumber)}
                             >
-                              <PackageCheck className="mr-2 h-4 w-4 text-emerald-400" />
+                              <PackageCheck className="mr-2 h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                               Mark as received
                             </DropdownMenuItem>
                           )}

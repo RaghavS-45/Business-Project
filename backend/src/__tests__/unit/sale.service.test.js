@@ -96,6 +96,19 @@ describe("SaleService", () => {
   // ─── _generateInvoiceNumber ──────────────────────────────
 
   describe("_generateInvoiceNumber", () => {
+    const fakeSale = (invoiceNumber) =>
+      Sale.create({
+        invoiceNumber,
+        cashier: cashierUser._id,
+        items: [{
+          product: product1._id, name: "Test", sku: "TST-001",
+          quantity: 1, unitPrice: 100, costPrice: 50, lineTotal: 100,
+        }],
+        subtotal: 100,
+        grandTotal: 100,
+        paymentMethod: "CASH",
+      });
+
     it("should generate invoice in INV-YYYYMMDD-XXXX format", async () => {
       const invoice = await SaleService._generateInvoiceNumber();
       expect(invoice).toMatch(/^INV-\d{8}-\d{4}$/);
@@ -106,27 +119,39 @@ describe("SaleService", () => {
       expect(invoice).toMatch(/-0001$/);
     });
 
-    it("should increment sequence based on existing sales today", async () => {
-      // Create a dummy sale to increment the counter
-      await Sale.create({
-        invoiceNumber: "INV-EXISTING-0001",
-        cashier: cashierUser._id,
-        items: [{
-          product: product1._id,
-          name: "Test",
-          sku: "TST-001",
-          quantity: 1,
-          unitPrice: 100,
-          costPrice: 50,
-          lineTotal: 100,
-        }],
-        subtotal: 100,
-        grandTotal: 100,
-        paymentMethod: "CASH",
-      });
+    it("should hand out consecutive numbers", async () => {
+      const a = await SaleService._generateInvoiceNumber();
+      const b = await SaleService._generateInvoiceNumber();
+      const c = await SaleService._generateInvoiceNumber();
+      expect([a, b, c].map((i) => i.slice(-4))).toEqual(["0001", "0002", "0003"]);
+    });
 
-      const invoice = await SaleService._generateInvoiceNumber();
-      expect(invoice).toMatch(/-0002$/);
+    it("should use the IST calendar day, not UTC", async () => {
+      // 20:00 UTC on 12 Nov is 01:30 IST on 13 Nov
+      const invoice = await SaleService._generateInvoiceNumber(null, new Date("2026-11-12T20:00:00Z"));
+      expect(invoice).toBe("INV-20261113-0001");
+    });
+
+    it("should restart at 0001 on the next day", async () => {
+      await SaleService._generateInvoiceNumber(null, new Date("2026-11-12T10:00:00Z"));
+      await SaleService._generateInvoiceNumber(null, new Date("2026-11-12T11:00:00Z"));
+      const nextDay = await SaleService._generateInvoiceNumber(null, new Date("2026-11-13T10:00:00Z"));
+      expect(nextDay).toBe("INV-20261113-0001");
+    });
+
+    it("should continue after invoices that already exist for the day", async () => {
+      // e.g. invoices created by the old count-based code before this deploy
+      const day = new Date("2026-11-13T06:00:00Z");
+      await fakeSale("INV-20261113-0001");
+      await fakeSale("INV-20261113-0007");
+      const invoice = await SaleService._generateInvoiceNumber(null, day);
+      expect(invoice).toBe("INV-20261113-0008");
+    });
+
+    it("should not be affected by refunds or other days' invoices", async () => {
+      await fakeSale("INV-20261112-0050");
+      const invoice = await SaleService._generateInvoiceNumber(null, new Date("2026-11-13T06:00:00Z"));
+      expect(invoice).toBe("INV-20261113-0001");
     });
   });
 
@@ -289,6 +314,89 @@ describe("SaleService", () => {
       // Verify no sale was created
       const sales = await Sale.countDocuments();
       expect(sales).toBe(0);
+    });
+  });
+
+  // ─── invoice numbers under concurrency ───────────────────
+
+  describe("invoice numbers under concurrent checkouts", () => {
+    const seqOf = (sale) => Number(sale.invoiceNumber.slice(-4));
+
+    it("gives every simultaneous checkout a unique, consecutive number", async () => {
+      const N = 25;
+      const sales = await Promise.all(
+        Array.from({ length: N }, (_, i) =>
+          SaleService.checkout(
+            [{ product: (i % 2 ? product1 : product2)._id, quantity: 1 }],
+            null, "CASH", cashierUser
+          )
+        )
+      );
+
+      const numbers = sales.map((s) => s.invoiceNumber);
+      expect(new Set(numbers).size).toBe(N);
+      expect(sales.map(seqOf).sort((a, b) => a - b)).toEqual(
+        Array.from({ length: N }, (_, i) => i + 1)
+      );
+      expect(await Sale.countDocuments()).toBe(N);
+    }, 30_000);
+
+    it("never oversells and leaves no gaps when stock runs out mid-rush", async () => {
+      const scarce = await createTestProduct({ name: "Scarce", sellingPrice: 50, costPrice: 20, stock: 5 });
+
+      const results = await Promise.allSettled(
+        Array.from({ length: 12 }, () =>
+          SaleService.checkout([{ product: scarce._id, quantity: 1 }], null, "UPI", cashierUser)
+        )
+      );
+
+      const ok = results.filter((r) => r.status === "fulfilled").map((r) => r.value);
+      const failed = results.filter((r) => r.status === "rejected");
+      expect(ok).toHaveLength(5);
+      expect(failed).toHaveLength(7);
+      failed.forEach((r) => expect(r.reason.message).toMatch(/Insufficient stock/));
+
+      expect((await Product.findById(scarce._id)).stock).toBe(0);
+      expect(ok.map(seqOf).sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5]);
+    }, 30_000);
+
+    it("does not use up a number when a checkout fails", async () => {
+      await expect(
+        SaleService.checkout([{ product: product1._id, quantity: 9999 }], null, "CASH", cashierUser)
+      ).rejects.toThrow(/Insufficient stock/);
+
+      const sale = await SaleService.checkout(
+        [{ product: product1._id, quantity: 1 }], null, "CASH", cashierUser
+      );
+      expect(sale.invoiceNumber).toMatch(/-0001$/);
+    });
+
+    it("recovers if the counter falls behind an existing invoice", async () => {
+      // Simulate a number taken outside the counter (e.g. an old server
+      // version still running during a deploy): counter says 1, but 0002
+      // is already used.
+      const first = await SaleService.checkout(
+        [{ product: product1._id, quantity: 1 }], null, "CASH", cashierUser
+      );
+      const prefix = first.invoiceNumber.slice(0, -4);
+      await Sale.create({
+        invoiceNumber: `${prefix}0002`,
+        cashier: cashierUser._id,
+        items: [{
+          product: product1._id, name: "Test", sku: "TST-001",
+          quantity: 1, unitPrice: 100, costPrice: 50, lineTotal: 100,
+        }],
+        subtotal: 100,
+        grandTotal: 100,
+        paymentMethod: "CASH",
+      });
+
+      const next = await SaleService.checkout(
+        [{ product: product1._id, quantity: 1 }], null, "CASH", cashierUser
+      );
+      expect(next.invoiceNumber).toBe(`${prefix}0003`);
+      // The rejected attempt rolled back its stock change
+      expect((await Product.findById(product1._id)).stock).toBe(48);
     });
   });
 

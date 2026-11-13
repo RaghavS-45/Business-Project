@@ -60,7 +60,16 @@ const saleItemSchema = new mongoose.Schema(
       max: 100,
       default: 0,
     },
-    // Computed in utils/pricing.js: qty × price, less item discount, less loyalty, plus tax (in paise)
+    hsnCode: { type: String, default: "" },
+    // Units returned so far (across all credit notes)
+    returnedQuantity: { type: Number, min: 0, default: 0 },
+    // GST breakdown for the line (rupees). taxableValue is what GST is charged
+    // on; cgst+sgst (same state) or igst (other state) add up to the line tax.
+    taxableValue: { type: Number, min: 0, default: 0 },
+    cgst: { type: Number, min: 0, default: 0 },
+    sgst: { type: Number, min: 0, default: 0 },
+    igst: { type: Number, min: 0, default: 0 },
+    // Computed in utils/pricing.js: qty × price, less item discount, less loyalty, plus tax
     lineTotal: {
       type: Number,
       required: true,
@@ -133,20 +142,62 @@ const saleSchema = new mongoose.Schema(
       min: 0,
     },
 
+    // ─── GST ────────────────────────────────────────────────
+    taxableTotal: { type: Number, min: 0, default: 0 },
+    cgstTotal: { type: Number, min: 0, default: 0 },
+    sgstTotal: { type: Number, min: 0, default: 0 },
+    igstTotal: { type: Number, min: 0, default: 0 },
+    pricesIncludeTax: { type: Boolean, default: false },
+    // true → IGST (buyer in another state), false → CGST + SGST
+    interState: { type: Boolean, default: false },
+    placeOfSupply: {
+      code: { type: String, default: "" },
+      name: { type: String, default: "" },
+    },
+    // Snapshots, so editing store/customer details never changes an issued invoice
+    seller: {
+      legalName: { type: String, default: "" },
+      tradeName: { type: String, default: "" },
+      gstin: { type: String, default: "" },
+      stateCode: { type: String, default: "" },
+      address: { type: String, default: "" },
+      phone: { type: String, default: "" },
+      email: { type: String, default: "" },
+      bankDetails: { type: String, default: "" },
+      invoiceTerms: { type: String, default: "" },
+    },
+    buyer: {
+      name: { type: String, default: "" },
+      gstin: { type: String, default: "" },
+      stateCode: { type: String, default: "" },
+      address: { type: String, default: "" },
+      phone: { type: String, default: "" },
+    },
+
     paymentMethod: {
       type: String,
       required: true,
       enum: {
-        values: ["CASH", "CARD", "UPI", "OTHER"],
-        message: "Payment method must be one of: CASH, CARD, UPI, OTHER",
+        // CREDIT = nothing paid at the counter, the whole bill is on credit
+        values: ["CASH", "CARD", "UPI", "OTHER", "CREDIT"],
+        message: "Payment method must be one of: CASH, CARD, UPI, OTHER, CREDIT",
       },
     },
 
     paymentStatus: {
       type: String,
-      enum: ["PAID", "PARTIAL", "REFUNDED"],
+      enum: ["PAID", "PARTIAL", "UNPAID", "REFUNDED"],
       default: "PAID",
     },
+
+    // ─── Credit ─────────────────────────────────────────────
+    // Paid at the counter when the bill was made
+    paidAtSale: { type: Number, min: 0 },
+    // Paid so far (at the counter + later payments)
+    amountPaid: { type: Number, min: 0 },
+    // Still owed by the customer (after payments and returns)
+    balanceDue: { type: Number, min: 0, default: 0 },
+    dueDate: { type: Date, default: null },
 
     // Populated asynchronously by the receipt worker
     receiptUrl: {
@@ -161,11 +212,15 @@ const saleSchema = new mongoose.Schema(
       default: "",
     },
 
+    // COMPLETED → PARTIALLY_RETURNED → REFUNDED (everything returned)
     status: {
       type: String,
-      enum: ["COMPLETED", "REFUNDED", "VOID"],
+      enum: ["COMPLETED", "PARTIALLY_RETURNED", "REFUNDED", "VOID"],
       default: "COMPLETED",
     },
+
+    // Total credited back to the buyer so far (sum of credit notes)
+    returnedTotal: { type: Number, min: 0, default: 0 },
   },
   {
     timestamps: true,
@@ -184,6 +239,16 @@ saleSchema.index({ customer: 1, createdAt: -1 });
 saleSchema.index({ cashier: 1, createdAt: -1 });
 saleSchema.index({ createdAt: -1 });
 saleSchema.index({ status: 1 });
+// Open (unpaid) invoices per customer, oldest first
+saleSchema.index({ customer: 1, balanceDue: 1, createdAt: 1 });
+
+/** Sales that count towards revenue (fully refunded ones don't). */
+export const REVENUE_STATUSES = ["COMPLETED", "PARTIALLY_RETURNED"];
+
+/** Aggregation expression: what a sale is worth after returns. */
+export const NET_SALE_VALUE = {
+  $subtract: ["$grandTotal", { $ifNull: ["$returnedTotal", 0] }],
+};
 
 const Sale = mongoose.model("Sale", saleSchema);
 
