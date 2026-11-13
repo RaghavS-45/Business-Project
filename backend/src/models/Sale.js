@@ -211,6 +211,12 @@ const saleSchema = new mongoose.Schema(
       default: null,
     },
 
+    // Where this invoice came from, if not straight from the POS
+    challan: { type: mongoose.Schema.Types.ObjectId, ref: "DeliveryChallan", default: null },
+    challanNumber: { type: String, default: "" },
+    quotation: { type: mongoose.Schema.Types.ObjectId, ref: "Quotation", default: null },
+    quoteNumber: { type: String, default: "" },
+
     notes: {
       type: String,
       trim: true,

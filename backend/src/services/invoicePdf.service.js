@@ -112,6 +112,56 @@ export function renderCreditNotePdf(cn) {
   });
 }
 
+const shortDate = (d) => formatDate(d).split(",")[0];
+
+/** Quotation: priced like the invoice it would become; no payment details. */
+export function renderQuotationPdf(q) {
+  return renderPdf(q, {
+    title: "QUOTATION",
+    number: q.quoteNumber,
+    meta: [
+      ["Quotation No.", q.quoteNumber],
+      ["Date", formatDate(q.createdAt)],
+      ["Valid Until", shortDate(q.validUntil)],
+    ],
+    trailingMeta: [],
+    partyLabel: "QUOTATION FOR",
+    totalLabel: "Quoted total",
+    total: q.grandTotal,
+    showGross: true,
+    stamp: q.status === "DECLINED" ? "DECLINED" : null,
+    notes: [q.notes, "Prices are valid until the date above and subject to stock availability."].filter(Boolean).join("\n"),
+    docName: "quotation",
+    paymentFooter: true, // bank details and terms help the buyer plan payment
+  });
+}
+
+/** Delivery challan: goods sent, with their value (needed for the e-way bill). */
+export function renderChallanPdf(c) {
+  const transport = [c.vehicleNumber && `Vehicle ${c.vehicleNumber}`, c.transporter].filter(Boolean).join(" · ");
+  return renderPdf(c, {
+    title: "DELIVERY CHALLAN",
+    number: c.challanNumber,
+    meta: [
+      ["Challan No.", c.challanNumber],
+      ["Date", formatDate(c.createdAt)],
+      ...(c.quoteNumber ? [["Against Quote", c.quoteNumber]] : []),
+      ...(transport ? [["Transport", transport]] : []),
+    ],
+    trailingMeta: [["Purpose", "Supply (invoice to follow)"]],
+    partyLabel: "CONSIGNEE",
+    totalLabel: "Value of goods",
+    total: c.grandTotal,
+    showGross: false,
+    stamp: c.status === "CANCELLED" ? "CANCELLED" : c.status === "INVOICED" ? `INVOICED (${c.invoiceNumber})` : null,
+    notes: [c.deliveryAddress && `Deliver to: ${c.deliveryAddress}`, c.notes, "Received the above goods in good condition.  Receiver's signature: ____________"]
+      .filter(Boolean)
+      .join("\n"),
+    docName: "delivery challan",
+    paymentFooter: false,
+  });
+}
+
 function renderPdf(sale, opts) {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: "A4", margin: PAGE.margin, bufferPages: true });
@@ -180,7 +230,7 @@ function draw(doc, sale, opts) {
 
   // ─── Bill to ─────────────────────────────────────────────
   y += 8;
-  doc.font("Helvetica-Bold").fontSize(8).fillColor(GREY).text("BILL TO", L, y);
+  doc.font("Helvetica-Bold").fontSize(8).fillColor(GREY).text(opts.partyLabel ?? "BILL TO", L, y);
   y = doc.y + 2;
   if (buyer.name) {
     doc.font("Helvetica-Bold").fontSize(10).fillColor("black").text(buyer.name, L, y, { width: CONTENT_W });

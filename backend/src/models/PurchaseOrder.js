@@ -24,11 +24,16 @@ const lineItemSchema = new mongoose.Schema(
       ref: "Product",
       required: [true, "Product reference is required"],
     },
+    // In `unit` below (e.g. 10 cartons, or 25.5 kg)
     quantity: {
       type: Number,
       required: [true, "Quantity is required"],
-      min: [1, "Quantity must be at least 1"],
+      min: [0.001, "Quantity must be more than 0"],
     },
+    // Ordering unit: the product's base unit or one of its packs
+    unit: { type: String, default: "" },
+    unitSize: { type: Number, default: 1 }, // base units per `unit`
+    // Cost per `unit`, before GST
     unitCost: {
       type: Number,
       required: [true, "Unit cost is required"],

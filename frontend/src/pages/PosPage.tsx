@@ -1,9 +1,8 @@
-import { useState, useRef, useMemo, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useProducts } from "@/hooks/useProducts";
 import { useCustomers } from "@/hooks/useCustomers";
 import { useCheckout, useDebouncedValue } from "@/hooks/usePos";
 import { useStoreSettings } from "@/hooks/useSettings";
-import { useKeyboardShortcuts } from "@/hooks/useKeyboardShortcuts";
 import { useCartStore, type PaymentMethod } from "@/stores/cartStore";
 import CartLine from "@/components/pos/CartLine";
 import { LEVEL_LABELS, type PriceLevel, type PricedProduct } from "@/lib/unitPricing";
@@ -25,7 +24,7 @@ type PosProduct = {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -60,11 +59,11 @@ import {
   Banknote,
   Smartphone,
   Loader2,
-  Keyboard,
   Check,
   User,
   Trash2,
   Clock,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { getTier } from "@/lib/loyalty";
@@ -96,7 +95,6 @@ export default function PosPage() {
   const [customerOpen, setCustomerOpen] = useState(false);
   // Amount received now ("" = the full bill); the rest goes on the customer's credit
   const [paidNow, setPaidNow] = useState("");
-  const [showShortcuts, setShowShortcuts] = useState(false);
   const { value: searchValue, debouncedValue: searchQuery, onChange: setSearchValue } = useDebouncedValue(250);
 
   // Stores
@@ -124,6 +122,8 @@ export default function PosPage() {
     priceLevel,
     taxInclusive,
     setTaxInclusive,
+    quotation,
+    setQuotation,
   } = useCartStore();
 
   // Pricing mode (GST added on top vs. included in price) comes from store settings
@@ -143,9 +143,6 @@ export default function PosPage() {
 
   const products = productsData?.products || productsData?.docs || [];
   const customers = customersData?.customers ?? [];
-
-  // Keyboard shortcuts
-  
 
   const handleAddToCart = useCallback(
     (product: PosProduct) => {
@@ -188,6 +185,7 @@ export default function PosPage() {
       // Only sent for a part payment; otherwise the server takes the full bill (or 0 for CREDIT)
       amountPaid: !isCredit && paidNowNum !== null ? paidNowNum : undefined,
       notes: notes || undefined,
+      quotationId: quotation?.id,
     };
 
     checkoutMutation.mutate(payload, {
@@ -405,6 +403,22 @@ export default function PosPage() {
               </Button>
             )}
           </div>
+
+          {quotation && (
+            <div className="flex items-center justify-between gap-2 rounded-md border border-primary/30 bg-primary/5 px-2.5 py-1.5 text-xs">
+              <span>
+                Billing quotation <span className="font-mono font-medium">{quotation.number}</span>
+              </span>
+              <button
+                type="button"
+                className="text-muted-foreground hover:text-foreground"
+                onClick={() => setQuotation(null)}
+                aria-label="Stop billing this quotation"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          )}
 
           {/* Customer selector */}
           <Popover open={customerOpen} onOpenChange={setCustomerOpen}>

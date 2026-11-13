@@ -24,6 +24,11 @@ const PurchaseOrdersPage = lazy(() => import("@/pages/PurchaseOrdersPage"));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
 const ReceivablesPage = lazy(() => import("@/pages/ReceivablesPage"));
 const CustomerStatementPage = lazy(() => import("@/pages/CustomerStatementPage"));
+const QuotationsPage = lazy(() => import("@/pages/QuotationsPage"));
+const ChallansPage = lazy(() => import("@/pages/ChallansPage"));
+const PurchaseBillsPage = lazy(() => import("@/pages/PurchaseBillsPage"));
+const PayablesPage = lazy(() => import("@/pages/PayablesPage"));
+const VendorStatementPage = lazy(() => import("@/pages/VendorStatementPage"));
 
 /** Route loading fallback */
 function PageLoader() {
@@ -99,6 +104,11 @@ export default function App() {
                   {/* Purchase Orders — admin/manager only */}
                   <Route element={<ProtectedRoute roles={["ADMIN", "MANAGER"]} />}>
                     <Route path="/purchase-orders" element={<PurchaseOrdersPage />} />
+                    <Route path="/purchase-bills" element={<PurchaseBillsPage />} />
+                    <Route path="/payables" element={<PayablesPage />} />
+                    <Route path="/vendors/:id/statement" element={<VendorStatementPage />} />
+                    <Route path="/quotations" element={<QuotationsPage />} />
+                    <Route path="/challans" element={<ChallansPage />} />
                   </Route>
 
                   <Route element={<ProtectedRoute roles={["ADMIN"]} />}>

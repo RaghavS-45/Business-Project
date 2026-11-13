@@ -52,6 +52,12 @@ export const checkoutSchema = z.object({
     }),
   }),
   amountPaid: z.coerce.number().min(0, "Amount paid cannot be negative").optional(),
+  // Billing a quotation marks it converted
+  quotationId: z
+    .string()
+    .regex(/^[a-fA-F0-9]{24}$/, "quotationId must be a valid MongoDB ObjectId")
+    .optional()
+    .nullable(),
   notes: z
     .string()
     .trim()

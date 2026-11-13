@@ -23,7 +23,7 @@ class SaleController {
    */
   async checkout(req, res, next) {
     try {
-      const { items, customerId, paymentMethod, notes, amountPaid } = req.body;
+      const { items, customerId, paymentMethod, notes, amountPaid, quotationId } = req.body;
 
       const sale = await saleService.checkout(
         items,
@@ -31,7 +31,7 @@ class SaleController {
         paymentMethod,
         req.user,
         notes,
-        { amountPaid }
+        { amountPaid, quotationId: quotationId || undefined }
       );
 
       res.status(201).json({

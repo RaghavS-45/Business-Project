@@ -6,6 +6,7 @@ export interface PurchaseOrderFilters {
   limit?: number;
   status?: "pending" | "approved" | "received" | "rejected";
   vendor?: string;
+  search?: string;
   sortBy?: "createdAt" | "totalAmount" | "status";
   sortOrder?: "asc" | "desc";
 }
@@ -13,7 +14,63 @@ export interface PurchaseOrderFilters {
 export interface LineItemInput {
   product: string;
   quantity: number;
+  /** Base unit (default) or one of the product's packs */
+  unit?: string;
   unitCost: number;
+}
+
+export type POStatus = "pending" | "approved" | "received" | "rejected";
+
+export interface PurchaseOrder {
+  _id: string;
+  poNumber: string;
+  vendor: { _id: string; name: string; email?: string; phone?: string; contactPerson?: string; gstin?: string; paymentTermsDays?: number };
+  items: Array<{
+    _id: string;
+    product: { _id: string; name: string; sku: string; stock: number; unit?: string } | string;
+    productName: string;
+    productSku: string;
+    quantity: number;
+    unit?: string;
+    unitSize?: number;
+    unitCost: number;
+  }>;
+  status: POStatus;
+  totalAmount: number;
+  notes?: string;
+  expectedDelivery?: string | null;
+  createdBy?: { name: string };
+  approvedBy?: { name: string };
+  approvedAt?: string | null;
+  receivedAt?: string | null;
+  createdAt: string;
+}
+
+/** A low-stock product and how much to order. */
+export interface ReorderSuggestion {
+  product: string;
+  name: string;
+  sku: string;
+  stock: number;
+  baseUnit: string;
+  lowStockThreshold: number;
+  onOrder: number;
+  unit: string;
+  unitSize: number;
+  quantity: number;
+  unitCost: number;
+  vendor: { _id: string; name: string } | null;
+}
+
+export function useReorderSuggestions(enabled = true) {
+  return useQuery({
+    queryKey: ["purchase-orders", "reorder"],
+    queryFn: async () => {
+      const { data } = await api.get("/purchase-orders/reorder-suggestions");
+      return data.data.suggestions as ReorderSuggestion[];
+    },
+    enabled,
+  });
 }
 
 export interface CreatePurchaseOrderInput {
@@ -38,7 +95,7 @@ export function usePurchaseOrder(id: string | undefined) {
     queryKey: ["purchase-orders", id],
     queryFn: async () => {
       const { data } = await api.get(`/purchase-orders/${id}`);
-      return data.data.purchaseOrder;
+      return data.data.purchaseOrder as PurchaseOrder;
     },
     enabled: !!id,
   });
@@ -72,7 +129,16 @@ export function useCreatePurchaseOrder() {
 export function useUpdatePurchaseOrder() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, ...poData }: { id: string; notes?: string; expectedDelivery?: string | null }) => {
+    mutationFn: async ({
+      id,
+      ...poData
+    }: {
+      id: string;
+      vendor?: string;
+      items?: LineItemInput[];
+      notes?: string;
+      expectedDelivery?: string | null;
+    }) => {
       const { data } = await api.put(`/purchase-orders/${id}`, poData);
       return data.data.purchaseOrder;
     },

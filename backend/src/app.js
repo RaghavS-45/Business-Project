@@ -22,6 +22,7 @@ import aiRoutes from "./routes/ai.routes.js";
 import settingsRoutes from "./routes/settings.routes.js";
 import creditNoteRoutes from "./routes/creditNote.routes.js";
 import receivableRoutes from "./routes/receivable.routes.js";
+import { quotationRouter, challanRouter, payableRouter } from "./routes/document.routes.js";
 
 /**
  * Express Application
@@ -139,6 +140,9 @@ app.use("/api/ai", aiRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/credit-notes", creditNoteRoutes);
 app.use("/api/receivables", receivableRoutes);
+app.use("/api/quotations", quotationRouter);
+app.use("/api/challans", challanRouter);
+app.use("/api/payables", payableRouter);
 
 // ─── 404 Handler ──────────────────────────────────────────
 app.use((_req, res) => {

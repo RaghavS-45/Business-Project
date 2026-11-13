@@ -58,6 +58,8 @@ interface CartState {
   notes: string;
   /** Store setting: selling prices already include GST. */
   taxInclusive: boolean;
+  /** Quotation being billed (it's marked converted at checkout). */
+  quotation: { id: string; number: string } | null;
 
   // Actions
   addItem: (item: AddItemInput) => void;
@@ -75,6 +77,13 @@ interface CartState {
   setPaymentMethod: (method: PaymentMethod) => void;
   setNotes: (notes: string) => void;
   setTaxInclusive: (taxInclusive: boolean) => void;
+  /** Replace the cart with a quotation's lines and customer. */
+  loadQuotation: (input: {
+    quotation: { id: string; number: string };
+    customer: { id: string; name: string; loyaltyPoints?: number; priceLevel?: PriceLevel } | null;
+    lines: Array<AddItemInput & { quantity: number; discountPercent?: number }>;
+  }) => { skipped: string[] };
+  setQuotation: (quotation: { id: string; number: string } | null) => void;
   clearCart: () => void;
 
   // Computed
@@ -134,6 +143,7 @@ export const useCartStore = create<CartState>()((set, get) => ({
   paymentMethod: "CASH",
   notes: "",
   taxInclusive: false,
+  quotation: null,
 
   addItem: (input) =>
     set((state) => {
@@ -217,6 +227,50 @@ export const useCartStore = create<CartState>()((set, get) => ({
 
   setTaxInclusive: (taxInclusive) => set({ taxInclusive }),
 
+  loadQuotation: ({ quotation, customer, lines }) => {
+    const skipped: string[] = [];
+    const items: CartItem[] = [];
+    for (const line of lines) {
+      const pack = line.unit ? line.pricing.packs?.find((p) => p.name === line.unit) : undefined;
+      const unit = pack ? pack.name : line.pricing.unit;
+      const item: CartItem = {
+        key: lineKey(line.product, unit),
+        product: line.product,
+        name: line.name,
+        sku: line.sku,
+        unit,
+        unitSize: pack?.size ?? 1,
+        baseUnit: line.pricing.unit,
+        pricing: line.pricing,
+        costPrice: line.costPrice,
+        stock: line.stock,
+        quantity: line.quantity,
+        discountPercent: line.discountPercent ?? 0,
+        taxPercent: line.taxPercent ?? 0,
+        image: line.image,
+      };
+      // Not enough stock for what was quoted: bill what's there, and say so
+      const max = maxQuantity(item);
+      if (max < (isLooseLine(item) ? 0.001 : 1)) {
+        skipped.push(`${line.name} (out of stock)`);
+        continue;
+      }
+      if (line.quantity > max) skipped.push(`${line.name} (only ${max} ${unit} in stock)`);
+      items.push({ ...item, quantity: clampQuantity(item, line.quantity) });
+    }
+    set({
+      items,
+      quotation,
+      selectedCustomer: customer?.id ?? null,
+      customerName: customer?.name ?? null,
+      customerLoyaltyPoints: customer?.loyaltyPoints ?? 0,
+      priceLevel: customer ? (customer.priceLevel ?? "RETAIL") : "RETAIL",
+    });
+    return { skipped };
+  },
+
+  setQuotation: (quotation) => set({ quotation }),
+
   clearCart: () =>
     set({
       items: [],
@@ -226,6 +280,7 @@ export const useCartStore = create<CartState>()((set, get) => ({
       priceLevel: "RETAIL",
       paymentMethod: "CASH",
       notes: "",
+      quotation: null,
     }),
 
   // ─── Computed (all amounts in rupees, exact to the paisa) ───

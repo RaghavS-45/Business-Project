@@ -9,10 +9,14 @@ import {
   ClipboardList,
   Settings,
   Wallet,
+  FileSpreadsheet,
+  Truck as TruckIcon,
+  ReceiptText,
+  HandCoins,
 } from "lucide-react";
 
 /** Pages in the sidebar (and the command palette), by role. */
-export const SECTIONS = ["Overview", "Sell", "Inventory", "Admin"] as const;
+export const SECTIONS = ["Overview", "Sell", "Buy", "Inventory", "Admin"] as const;
 
 export const navItems = [
   {
@@ -51,6 +55,20 @@ export const navItems = [
     roles: ["ADMIN", "MANAGER", "CASHIER"],
   },
   {
+    label: "Quotations",
+    section: "Sell",
+    icon: FileSpreadsheet,
+    path: "/quotations",
+    roles: ["ADMIN", "MANAGER"],
+  },
+  {
+    label: "Challans",
+    section: "Sell",
+    icon: TruckIcon,
+    path: "/challans",
+    roles: ["ADMIN", "MANAGER"],
+  },
+  {
     label: "Dues",
     section: "Sell",
     icon: Wallet,
@@ -59,16 +77,30 @@ export const navItems = [
   },
   {
     label: "Vendors",
-    section: "Inventory",
+    section: "Buy",
     icon: Truck,
     path: "/vendors",
     roles: ["ADMIN", "MANAGER"],
   },
   {
     label: "Purchase Orders",
-    section: "Inventory",
+    section: "Buy",
     icon: ClipboardList,
     path: "/purchase-orders",
+    roles: ["ADMIN", "MANAGER"],
+  },
+  {
+    label: "Purchase Bills",
+    section: "Buy",
+    icon: ReceiptText,
+    path: "/purchase-bills",
+    roles: ["ADMIN", "MANAGER"],
+  },
+  {
+    label: "Payables",
+    section: "Buy",
+    icon: HandCoins,
+    path: "/payables",
     roles: ["ADMIN", "MANAGER"],
   },
   {

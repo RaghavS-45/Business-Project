@@ -13,10 +13,13 @@ const objectId = z
 // ─── Line Item ────────────────────────────────────────────
 const lineItemSchema = z.object({
   product: objectId,
+  // Whole numbers, or up to 3 decimals for loose units (checked per product)
   quantity: z.coerce
     .number({ required_error: "Quantity is required" })
-    .int("Quantity must be a whole number")
-    .min(1, "Quantity must be at least 1"),
+    .positive("Quantity must be more than 0")
+    .refine((v) => Math.round(v * 1000) / 1000 === v, "Quantity can have at most 3 decimals"),
+  // Base unit (default) or one of the product's packs
+  unit: z.string().trim().toLowerCase().max(30).optional(),
   unitCost: z.coerce
     .number({ required_error: "Unit cost is required" })
     .min(0, "Unit cost cannot be negative"),
@@ -41,7 +44,11 @@ export const createPurchaseOrderSchema = z.object({
 });
 
 // ─── Update (partial, but items still validated if present) ──
+// Items and vendor can only change while the PO is pending.
 export const updatePurchaseOrderSchema = z.object({
+  vendor: objectId.optional(),
+  items: z.array(lineItemSchema).min(1, "At least one item is required").optional(),
+
   notes: z
     .string()
     .trim()
@@ -69,6 +76,7 @@ export const purchaseOrderQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   status: z.enum(["pending", "approved", "received", "rejected"]).optional(),
   vendor: objectId.optional(),
+  search: z.string().trim().max(100).optional(),
   sortBy: z.enum(["createdAt", "totalAmount", "status"]).default("createdAt"),
   sortOrder: z.enum(["asc", "desc"]).default("desc"),
 });

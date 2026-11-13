@@ -5,6 +5,18 @@ import Vendor from "../models/Vendor.js";
 import ApiError from "../utils/ApiError.js";
 import logger from "../config/logger.js";
 import { addJob, QUEUE_NAMES } from "../config/queue.js";
+import { sellingUnit, validQuantity, allowsDecimal, roundQty } from "../utils/unitPricing.js";
+import { containsRegex } from "../utils/search.js";
+import { toPaise, toRupees } from "../utils/pricing.js";
+
+/** PO total (before GST) to the paisa; lean() reads skip the model's virtual. */
+const withTotal = (po) => ({
+  ...po,
+  totalAmount: toRupees(po.items.reduce((sum, i) => sum + Math.round(i.quantity * toPaise(i.unitCost)), 0)),
+});
+
+/** Base units a PO line brings in. */
+const baseQtyOf = (item) => roundQty(item.quantity * (item.unitSize || 1));
 
 /**
  * PurchaseOrder Service — business logic layer.
@@ -19,6 +31,93 @@ import { addJob, QUEUE_NAMES } from "../config/queue.js";
 
 class PurchaseOrderService {
   /**
+   * Check each line's product, unit and quantity, and snapshot name/SKU.
+   * Cost defaults to the product's cost price for the chosen unit.
+   * @private
+   */
+  async _buildItems(items) {
+    const ids = [...new Set(items.map((i) => String(i.product)))];
+    const products = await Product.find({ _id: { $in: ids }, isActive: true }).lean();
+    const byId = new Map(products.map((p) => [String(p._id), p]));
+    const missing = ids.filter((id) => !byId.has(id));
+    if (missing.length) {
+      throw ApiError.badRequest(`Some products were not found or are inactive: ${missing.join(", ")}`);
+    }
+
+    return items.map((item) => {
+      const product = byId.get(String(item.product));
+      const unit = sellingUnit(product, item.unit);
+      if (!unit) throw ApiError.badRequest(`"${product.name}" has no ${item.unit} pack`);
+      if (!validQuantity(product, unit, item.quantity)) {
+        throw ApiError.badRequest(
+          `Quantity ${item.quantity} isn't valid for "${product.name}": ` +
+            (unit.isBase && allowsDecimal(product.unit) ? "use at most 3 decimals" : `${unit.name} is counted in whole numbers`)
+        );
+      }
+      return {
+        product: product._id,
+        quantity: item.quantity,
+        unit: unit.name,
+        unitSize: unit.size,
+        unitCost: item.unitCost ?? toRupees(Math.round(toPaise(product.costPrice) * unit.size)),
+        productName: product.name,
+        productSku: product.sku,
+      };
+    });
+  }
+
+  /**
+   * What to reorder: active products at or below their reorder level, less
+   * what's already on order (pending / approved POs). Suggests enough to
+   * bring stock back to twice the reorder level, in the product's first
+   * pack if it has one. Grouped by each product's usual supplier.
+   */
+  async reorderSuggestions() {
+    const [low, open] = await Promise.all([
+      Product.find({ isActive: true, $expr: { $lte: ["$stock", "$lowStockThreshold"] } })
+        .populate("vendor", "name")
+        .lean(),
+      PurchaseOrder.find({ status: { $in: ["pending", "approved"] } }).select("items").lean(),
+    ]);
+
+    const onOrder = new Map();
+    for (const po of open) {
+      for (const item of po.items) {
+        const id = String(item.product);
+        onOrder.set(id, roundQty((onOrder.get(id) ?? 0) + baseQtyOf(item)));
+      }
+    }
+
+    const suggestions = [];
+    for (const p of low) {
+      const ordered = onOrder.get(String(p._id)) ?? 0;
+      const target = Math.max(p.lowStockThreshold * 2, p.lowStockThreshold + 1);
+      const needBase = roundQty(target - p.stock - ordered);
+      if (needBase <= 0) continue;
+      const pack = p.packs?.[0];
+      const quantity = pack
+        ? Math.ceil(needBase / pack.size)
+        : allowsDecimal(p.unit) ? needBase : Math.ceil(needBase);
+      const unitSize = pack?.size ?? 1;
+      suggestions.push({
+        product: p._id,
+        name: p.name,
+        sku: p.sku,
+        stock: p.stock,
+        baseUnit: p.unit,
+        lowStockThreshold: p.lowStockThreshold,
+        onOrder: ordered,
+        unit: pack?.name ?? p.unit,
+        unitSize,
+        quantity,
+        unitCost: toRupees(Math.round(toPaise(p.costPrice) * unitSize)),
+        vendor: p.vendor ? { _id: p.vendor._id, name: p.vendor.name } : null,
+      });
+    }
+    return suggestions.sort((a, b) => a.stock / (a.lowStockThreshold || 1) - b.stock / (b.lowStockThreshold || 1));
+  }
+
+  /**
    * Create a new purchase order (status: pending).
    * Validates that all referenced products and vendor exist and are active.
    * Snapshots product name + SKU onto each line item for historical integrity.
@@ -31,34 +130,7 @@ class PurchaseOrderService {
     if (!vendor) throw ApiError.notFound("Vendor not found");
     if (!vendor.isActive) throw ApiError.badRequest("Cannot create PO for an inactive vendor");
 
-    // Validate all products exist, are active, and snapshot name/SKU
-    const productIds = items.map((i) => i.product);
-    const products = await Product.find({
-      _id: { $in: productIds },
-      isActive: true,
-    }).lean();
-
-    if (products.length !== productIds.length) {
-      const foundIds = products.map((p) => p._id.toString());
-      const missing = productIds.filter((id) => !foundIds.includes(id.toString()));
-      throw ApiError.badRequest(
-        `Some products were not found or are inactive: ${missing.join(", ")}`
-      );
-    }
-
-    // Build product lookup map for snapshots
-    const productMap = Object.fromEntries(products.map((p) => [p._id.toString(), p]));
-
-    // Enrich line items with product name/SKU snapshots
-    const enrichedItems = items.map((item) => {
-      const product = productMap[item.product.toString()];
-      return {
-        ...item,
-        unitCost: item.unitCost ?? product.costPrice,
-        productName: product.name,
-        productSku: product.sku,
-      };
-    });
+    const enrichedItems = await this._buildItems(items);
 
     const po = await PurchaseOrder.create({
       vendor: vendorId,
@@ -94,11 +166,17 @@ class PurchaseOrderService {
    * Paginated list with optional status/vendor filters.
    */
   async list(query) {
-    const { page, limit, status, vendor, sortBy, sortOrder } = query;
+    const { page, limit, status, vendor, search, sortBy, sortOrder } = query;
 
     const filter = {};
     if (status) filter.status = status;
     if (vendor) filter.vendor = vendor;
+    if (search) {
+      // PO number, supplier name or a product on it
+      const rx = containsRegex(search);
+      const vendorIds = await Vendor.find({ name: rx }).distinct("_id");
+      filter.$or = [{ poNumber: rx }, { vendor: { $in: vendorIds } }, { "items.productName": rx }];
+    }
 
     const sortObj = { [sortBy]: sortOrder === "asc" ? 1 : -1 };
     const skip = (page - 1) * limit;
@@ -106,7 +184,7 @@ class PurchaseOrderService {
     const [purchaseOrders, total] = await Promise.all([
       PurchaseOrder.find(filter)
         .populate("vendor", "name email phone")
-        .populate("items.product", "name sku stock")
+        .populate("items.product", "name sku stock unit")
         .populate("createdBy", "name email")
         .populate("approvedBy", "name email")
         .sort(sortObj)
@@ -117,7 +195,7 @@ class PurchaseOrderService {
     ]);
 
     return {
-      purchaseOrders,
+      purchaseOrders: purchaseOrders.map(withTotal),
       pagination: {
         total,
         page,
@@ -134,14 +212,14 @@ class PurchaseOrderService {
    */
   async getById(id) {
     const po = await PurchaseOrder.findById(id)
-      .populate("vendor", "name email phone contactPerson address paymentTerms")
-      .populate("items.product", "name sku stock costPrice sellingPrice")
+      .populate("vendor", "name email phone contactPerson address paymentTerms paymentTermsDays gstin")
+      .populate("items.product", "name sku stock unit costPrice sellingPrice")
       .populate("createdBy", "name email")
       .populate("approvedBy", "name email")
       .lean({ virtuals: true });
 
     if (!po) throw ApiError.notFound("Purchase order not found");
-    return po;
+    return withTotal(po);
   }
 
   /**
@@ -159,7 +237,14 @@ class PurchaseOrderService {
     }
 
     const beforeState = po.toJSON();
-    Object.assign(po, data);
+    const { items, vendor: vendorId, ...rest } = data;
+    if (vendorId && String(vendorId) !== String(po.vendor)) {
+      const vendor = await Vendor.findById(vendorId);
+      if (!vendor || !vendor.isActive) throw ApiError.badRequest("Choose an active supplier");
+      po.vendor = vendor._id;
+    }
+    if (items) po.items = await this._buildItems(items);
+    Object.assign(po, rest);
     await po.save();
 
     logger.info(`Purchase order updated: ${po.poNumber}`);
@@ -219,10 +304,11 @@ class PurchaseOrderService {
       try {
         await session.withTransaction(async () => {
           // Atomic bulk stock increment for all line items
+          // Packs arrive as base units (10 cartons of 12 → 120 pcs)
           const bulkOps = po.items.map((item) => ({
             updateOne: {
               filter: { _id: item.product, isActive: true },
-              update: { $inc: { stock: item.quantity } },
+              update: [{ $set: { stock: { $round: [{ $add: ["$stock", baseQtyOf(item)] }, 3] } } }],
             },
           }));
 

@@ -23,6 +23,7 @@ export function useCheckout() {
       paymentMethod: string;
       amountPaid?: number;
       notes?: string;
+      quotationId?: string;
     }) => {
       const { data } = await api.post("/sales/checkout", payload);
       return data.data.sale;
@@ -33,6 +34,7 @@ export function useCheckout() {
       queryClient.invalidateQueries({ queryKey: ["sales"] });
       queryClient.invalidateQueries({ queryKey: ["customers"] });
       queryClient.invalidateQueries({ queryKey: ["receivables"] });
+      queryClient.invalidateQueries({ queryKey: ["quotations"] });
     },
   });
 }

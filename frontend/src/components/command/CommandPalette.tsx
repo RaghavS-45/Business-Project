@@ -26,6 +26,9 @@ import {
   User,
   UserPlus,
   Wallet,
+  FileSpreadsheet,
+  Truck,
+  ReceiptText,
 } from "lucide-react";
 import api from "@/lib/axios";
 import { navItems } from "@/components/layout/navItems";
@@ -152,6 +155,9 @@ export default function CommandPalette() {
     const list = [
       { id: "sale", label: "New sale", hint: "Open the POS", icon: ShoppingCart, run: () => navigate("/pos"), show: true },
       { id: "payment", label: "Record a payment", hint: "Collect dues", icon: Wallet, run: () => navigate("/receivables"), show: canManage },
+      { id: "quote", label: "New quotation", hint: "", icon: FileSpreadsheet, run: () => navigate(fresh("/quotations?new=1")), show: canManage },
+      { id: "challan", label: "New delivery challan", hint: "", icon: Truck, run: () => navigate(fresh("/challans?new=1")), show: canManage },
+      { id: "bill", label: "Enter purchase bill", hint: "Stock in", icon: ReceiptText, run: () => navigate(fresh("/purchase-bills?new=1")), show: canManage },
       { id: "product", label: "Add product", hint: "", icon: Plus, run: () => navigate(fresh("/products?new=1")), show: canManage },
       { id: "customer", label: "Add customer", hint: "", icon: UserPlus, run: () => navigate(fresh("/customers?new=1")), show: true },
       {

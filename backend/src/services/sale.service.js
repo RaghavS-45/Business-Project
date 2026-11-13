@@ -15,6 +15,8 @@ import returnService from "./return.service.js";
 import { splitTax, stateInfo, stateFromGstin } from "../utils/gst.js";
 import { sellingUnit, validQuantity, allowsDecimal, resolveLine } from "../utils/unitPricing.js";
 import { containsRegex } from "../utils/search.js";
+import DeliveryChallan from "../models/DeliveryChallan.js";
+import Quotation from "../models/Quotation.js";
 
 /**
  * Sale Service — Checkout Pipeline with Mongoose Transactions
@@ -86,7 +88,7 @@ class SaleService {
    * @param {string} notes         - Optional notes
    * @returns {Promise<Object>}    - The created Sale document
    */
-  async checkout(cartItems, customerId, paymentMethod, cashierUser, notes = "", { amountPaid } = {}) {
+  async checkout(cartItems, customerId, paymentMethod, cashierUser, notes = "", { amountPaid, challanId, quotationId } = {}) {
     // ── Role-based discount caps ─────────────────────────────
     // Cashiers cannot set arbitrary discounts.
     const DISCOUNT_CAPS = {
@@ -106,7 +108,8 @@ class SaleService {
     for (let attempt = 1; ; attempt++) {
       try {
         sale = await this._checkoutTransaction(
-          cartItems, customerId, paymentMethod, cashierUser, notes, maxDiscount, amountPaid
+          cartItems, customerId, paymentMethod, cashierUser, notes, maxDiscount, amountPaid,
+          { challanId, quotationId }
         );
         break;
       } catch (error) {
@@ -171,7 +174,7 @@ class SaleService {
    * Everything is recomputed from scratch on each try, so retries are safe.
    * @private
    */
-  async _checkoutTransaction(cartItems, customerId, paymentMethod, cashierUser, notes, maxDiscount, amountPaid) {
+  async _checkoutTransaction(cartItems, customerId, paymentMethod, cashierUser, notes, maxDiscount, amountPaid, source = {}) {
     const session = await mongoose.startSession();
     let sale;
     try {
@@ -195,6 +198,32 @@ class SaleService {
           const tier = getTier(customer.loyaltyPoints); // tier BEFORE this sale
           loyaltyPercent = tier.discount;
           loyaltyTier = tier.name;
+        }
+
+        // ── Invoicing a delivery challan / billing a quotation ──
+        // A challan's goods already left the shelf, so its invoice takes no
+        // stock. Each challan or quote can turn into one invoice only.
+        let challan = null;
+        let quotation = null;
+        if (source.challanId) {
+          challan = await DeliveryChallan.findById(source.challanId).session(session);
+          if (!challan) throw ApiError.notFound("Delivery challan not found");
+          if (challan.status !== "OPEN") {
+            throw ApiError.badRequest(`Challan ${challan.challanNumber} is already ${challan.status.toLowerCase()}`);
+          }
+          if (String(challan.customer) !== String(customerId)) {
+            throw ApiError.badRequest("The invoice must be for the challan's customer");
+          }
+        }
+        if (source.quotationId) {
+          quotation = await Quotation.findById(source.quotationId).session(session);
+          if (!quotation) throw ApiError.notFound("Quotation not found");
+          if (!["OPEN", "ACCEPTED"].includes(quotation.status)) {
+            throw ApiError.badRequest(`Quotation ${quotation.quoteNumber} is ${quotation.status.toLowerCase()}`);
+          }
+          if (quotation.customer && String(quotation.customer) !== String(customerId ?? "")) {
+            throw ApiError.badRequest("The invoice must be for the quotation's customer");
+          }
         }
 
         // ── GST context ──────────────────────────────────
@@ -255,11 +284,13 @@ class SaleService {
           // Take the stock (in base units). The $gte guard means it can never
           // go negative, even with concurrent checkouts; $round keeps loose
           // quantities (kg, ltr) free of float drift.
-          const taken = await Product.updateOne(
-            { _id: product._id, isActive: true, stock: { $gte: resolved.baseQty } },
-            [{ $set: { stock: { $round: [{ $subtract: ["$stock", resolved.baseQty] }, 3] } } }],
-            { session }
-          );
+          const taken = challan
+            ? { matchedCount: 1 } // left with the challan
+            : await Product.updateOne(
+                { _id: product._id, isActive: true, stock: { $gte: resolved.baseQty } },
+                [{ $set: { stock: { $round: [{ $subtract: ["$stock", resolved.baseQty] }, 3] } } }],
+                { session }
+              );
           if (taken.matchedCount === 0) {
             throw ApiError.badRequest(
               `Insufficient stock for "${product.name}": requested ${resolved.baseQty} ${product.unit}, ` +
@@ -408,12 +439,37 @@ class SaleService {
               balanceDue: toRupees(dueP),
               dueDate,
               paymentStatus: dueP === 0 ? "PAID" : paidP === 0 ? "UNPAID" : "PARTIAL",
+              challan: challan?._id ?? null,
+              challanNumber: challan?.challanNumber ?? "",
+              quotation: quotation?._id ?? null,
+              quoteNumber: quotation?.quoteNumber ?? "",
               notes,
             },
           ],
           { session }
         );
         sale = created;
+
+        if (challan) {
+          const marked = await DeliveryChallan.updateOne(
+            { _id: challan._id, status: "OPEN" },
+            { $set: { status: "INVOICED", sale: sale._id, invoiceNumber: sale.invoiceNumber, invoicedAt: new Date() } },
+            { session }
+          );
+          if (marked.modifiedCount !== 1) throw ApiError.conflict("Challan was invoiced already");
+        }
+        if (quotation) {
+          await Quotation.updateOne(
+            { _id: quotation._id },
+            {
+              $set: {
+                status: "CONVERTED",
+                convertedTo: { kind: "SALE", id: sale._id, number: sale.invoiceNumber, at: new Date() },
+              },
+            },
+            { session }
+          );
+        }
 
         // Update customer loyalty if not a walk-in
         if (customerId) {

@@ -1,363 +1,290 @@
 import { useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { format } from "date-fns";
+import { toast } from "sonner";
+import { AlertTriangle, CheckCircle, Loader2, Plus, ReceiptText, Sparkles } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import PurchaseOrderDialog, { type PoDraft } from "@/components/purchaseOrders/PurchaseOrderDialog";
+import PurchaseOrderView from "@/components/purchaseOrders/PurchaseOrderView";
+import PoStatusBadge from "@/components/purchaseOrders/PoStatusBadge";
+import { EmptyList, ListToolbar, Pager } from "@/components/documents/ListBits";
 import {
   usePurchaseOrders,
+  usePurchaseOrderStats,
+  useReorderSuggestions,
   useUpdatePurchaseOrderStatus,
-  useDeletePurchaseOrder,
+  type POStatus,
+  type PurchaseOrder,
+  type ReorderSuggestion,
 } from "@/hooks/usePurchaseOrders";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  Plus,
-  MoreHorizontal,
-  Trash2,
-  ChevronLeft,
-  ChevronRight,
-  CheckCircle,
-  XCircle,
-  PackageCheck,
-  Eye,
-} from "lucide-react";
-import { toast } from "sonner";
-import PurchaseOrderForm from "@/components/purchaseOrders/PurchaseOrderForm";
-import PurchaseOrderDetail from "../components/purchaseOrders/PurchaseOrderDetail";
-import { formatPrice } from "@/lib/pricing";
+import { useDebouncedValue } from "@/hooks/usePos";
+import { formatINR } from "@/lib/pricing";
+import { getErrorMessage } from "@/lib/errors";
+import { cn } from "@/lib/utils";
 
-type POStatus = "all" | "pending" | "approved" | "received" | "rejected";
-
-const STATUS_OPTIONS: { label: string; value: POStatus }[] = [
-  { label: "All statuses", value: "all" },
-  { label: "Pending", value: "pending" },
-  { label: "Approved", value: "approved" },
-  { label: "Received", value: "received" },
-  { label: "Rejected", value: "rejected" },
-];
-
-function statusBadge(status: string) {
-  switch (status) {
-    case "pending":
-      return <Badge className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">Pending</Badge>;
-    case "approved":
-      return <Badge className="text-[10px] bg-primary/10 text-primary border-primary/20">Approved</Badge>;
-    case "received":
-      return <Badge className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">Received</Badge>;
-    case "rejected":
-      return <Badge variant="destructive" className="text-[10px]">Rejected</Badge>;
-    default:
-      return <Badge variant="outline" className="text-[10px]">{status}</Badge>;
-  }
-}
-
+/**
+ * Purchase orders: what to reorder, what needs approval, what's on the way.
+ *
+ *   create → approve (send the PDF to the supplier) → goods arrive → enter the bill
+ */
 export default function PurchaseOrdersPage() {
+  const [status, setStatus] = useState<POStatus | "">("");
   const [page, setPage] = useState(1);
-  const [statusFilter, setStatusFilter] = useState<POStatus>("all");
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [detailPO, setDetailPO] = useState<Record<string, unknown> | null>(null);
+  const { value: search, debouncedValue: q, onChange: setSearch } = useDebouncedValue(250);
+  const [draft, setDraft] = useState<{ key: string; value: PoDraft } | null>(null);
+  const [selectedId, setSelectedId] = useState<string | undefined>();
+
+  // Links: ?new=1, ?po=<id>
+  const [params] = useSearchParams();
+  const linkKey = params.toString();
+  const [handledLink, setHandledLink] = useState("");
+  if (linkKey && linkKey !== handledLink) {
+    setHandledLink(linkKey);
+    if (params.get("new")) setDraft({ key: `new-${linkKey}`, value: {} });
+    if (params.get("po")) setSelectedId(params.get("po") ?? undefined);
+  }
 
   const { data, isLoading } = usePurchaseOrders({
     page,
     limit: 15,
-    status: statusFilter === "all" ? undefined : statusFilter,
+    status: status || undefined,
+    search: q || undefined,
     sortBy: "createdAt",
     sortOrder: "desc",
   });
+  const { data: stats } = usePurchaseOrderStats();
+  const { data: suggestions = [] } = useReorderSuggestions();
+  const counts = stats?.counts ?? { pending: 0, approved: 0, received: 0, rejected: 0 };
+  const rows: PurchaseOrder[] = data?.purchaseOrders ?? [];
 
-  const updateStatus = useUpdatePurchaseOrderStatus();
-  const deletePO = useDeletePurchaseOrder();
+  const tabs = [
+    { value: "", label: "All" },
+    { value: "pending", label: `Needs approval${counts.pending ? ` (${counts.pending})` : ""}` },
+    { value: "approved", label: `Waiting for goods${counts.approved ? ` (${counts.approved})` : ""}` },
+    { value: "received", label: "Received" },
+    { value: "rejected", label: "Rejected" },
+  ];
 
-  const purchaseOrders = data?.purchaseOrders || [];
-  const total = data?.pagination?.total || 0;
-  const totalPages = data?.pagination?.totalPages || 1;
-
-  const handleStatusChange = (
-    id: string,
-    status: "approved" | "rejected" | "received",
-    poNumber: string
-  ) => {
-    const messages: Record<string, string> = {
-      approved: `Approve "${poNumber}"?`,
-      rejected: `Reject "${poNumber}"?`,
-      received: `Mark "${poNumber}" as received? This will automatically update product stock.`,
-    };
-    if (!confirm(messages[status])) return;
-
-    updateStatus.mutate(
-      { id, status },
-      {
-        onSuccess: () => {
-          const successMsg: Record<string, string> = {
-            approved: `${poNumber} approved`,
-            rejected: `${poNumber} rejected`,
-            received: `${poNumber} received — inventory updated`,
-          };
-          toast.success(successMsg[status]);
-          // Close detail dialog if open to show fresh table
-          if (detailPO && (detailPO._id as string) === id) setDetailPO(null);
-        },
-        onError: () => toast.error("Failed to update status"),
-      }
-    );
-  };
-
-  const handleDelete = (id: string, poNumber: string) => {
-    if (!confirm(`Delete "${poNumber}"? This cannot be undone.`)) return;
-    deletePO.mutate(id, {
-      onSuccess: () => toast.success(`${poNumber} deleted`),
-      onError: () => toast.error("Failed to delete purchase order"),
-    });
-  };
+  const openNew = (value: PoDraft = {}) => setDraft({ key: `n${Date.now()}`, value });
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Purchase Orders</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {total} order{total !== 1 ? "s" : ""} — inventory updates automatically on receipt
+          <p className="mt-1 text-sm text-muted-foreground">
+            Order from suppliers → approve and send → goods arrive →{" "}
+            <Link to="/purchase-bills" className="text-primary hover:underline">
+              enter the bill
+            </Link>
           </p>
         </div>
-        <Button
-          onClick={() => setCreateDialogOpen(true)}
-          
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          New Purchase Order
+        <Button onClick={() => openNew()}>
+          <Plus className="mr-1.5 h-4 w-4" />
+          New purchase order
         </Button>
       </div>
 
-      {/* Filter */}
-      <div className="flex gap-3">
-        <Select
-          value={statusFilter}
-          onValueChange={(v) => {
-            setStatusFilter(v as POStatus);
-            setPage(1);
-          }}
-        >
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Filter by status" />
-          </SelectTrigger>
-          <SelectContent>
-            {STATUS_OPTIONS.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
-                {opt.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      <ReorderPanel suggestions={suggestions} onDraft={(vendor, items) => openNew({ vendor, suggestions: items })} />
 
-      {/* Table */}
-      <div className="rounded-xl border border-border/50 bg-card overflow-hidden">
+      <ListToolbar
+        tabs={tabs}
+        value={status}
+        onChange={(v) => {
+          setStatus(v as POStatus | "");
+          setPage(1);
+        }}
+        search={search}
+        onSearch={(v) => {
+          setSearch(v);
+          setPage(1);
+        }}
+        placeholder="PO no., supplier or product"
+      />
+
+      <div className="overflow-hidden rounded-xl border border-border/50 bg-card">
         {isLoading ? (
-          <div className="p-6 space-y-3">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <Skeleton key={i} className="h-12 w-full" />
+          <div className="space-y-3 p-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <Skeleton key={i} className="h-11 w-full" />
             ))}
           </div>
+        ) : !rows.length ? (
+          <EmptyList
+            title={status || q ? "No purchase orders match" : "No purchase orders yet"}
+            hint="Create one when you need stock. Low-stock items can be added in one click."
+            action={
+              !status && !q ? (
+                <Button size="sm" onClick={() => openNew()}>
+                  <Plus className="mr-1 h-3.5 w-3.5" />
+                  New purchase order
+                </Button>
+              ) : undefined
+            }
+          />
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow className="border-border/50 bg-muted/30">
-                <TableHead className="text-xs font-semibold">PO Number</TableHead>
-                <TableHead className="text-xs font-semibold">Vendor</TableHead>
-                <TableHead className="text-xs font-semibold text-center">Items</TableHead>
-                <TableHead className="text-xs font-semibold">Status</TableHead>
-                <TableHead className="text-xs font-semibold text-right">Total</TableHead>
-                <TableHead className="text-xs font-semibold">Date</TableHead>
-                <TableHead className="text-xs font-semibold w-10"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {purchaseOrders.map(
-                (po: {
-                  _id: string;
-                  poNumber: string;
-                  vendor: { _id: string; name: string };
-                  items: { quantity: number; unitCost: number }[];
-                  status: string;
-                  totalAmount: number;
-                  createdAt: string;
-                }) => (
-                  <TableRow
-                    key={po._id}
-                    className="border-border/30 hover:bg-muted/20 transition-colors cursor-pointer"
-                    onClick={() => setDetailPO(po as unknown as Record<string, unknown>)}
-                  >
-                    <TableCell className="font-mono text-xs font-medium">
-                      {po.poNumber}
-                    </TableCell>
-                    <TableCell className="text-sm font-medium">
-                      {po.vendor?.name || "—"}
-                    </TableCell>
-                    <TableCell className="text-center text-sm text-muted-foreground">
-                      {po.items.length}
-                    </TableCell>
-                    <TableCell>{statusBadge(po.status)}</TableCell>
-                    <TableCell className="text-right text-sm font-medium">
-                        {formatPrice(
-                          po.items.reduce((sum, i) => sum + i.quantity * i.unitCost, 0)
-                        )}
-                        </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {new Date(po.createdAt).toLocaleDateString("en-IN", {
-                        day: "2-digit",
-                        month: "short",
-                        year: "numeric",
-                      })}
-                    </TableCell>
-                    <TableCell onClick={(e) => e.stopPropagation()}>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            onClick={() => setDetailPO(po as unknown as Record<string, unknown>)}
-                          >
-                            <Eye className="mr-2 h-4 w-4" />
-                            View details
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          {po.status === "pending" && (
-                            <>
-                              <DropdownMenuItem
-                                onClick={() => handleStatusChange(po._id, "approved", po.poNumber)}
-                              >
-                                <CheckCircle className="mr-2 h-4 w-4 text-primary" />
-                                Approve
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => handleStatusChange(po._id, "rejected", po.poNumber)}
-                                className="text-destructive focus:text-destructive"
-                              >
-                                <XCircle className="mr-2 h-4 w-4" />
-                                Reject
-                              </DropdownMenuItem>
-                            </>
-                          )}
-                          {po.status === "approved" && (
-                            <DropdownMenuItem
-                              onClick={() => handleStatusChange(po._id, "received", po.poNumber)}
-                            >
-                              <PackageCheck className="mr-2 h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                              Mark as received
-                            </DropdownMenuItem>
-                          )}
-                          {po.status === "pending" && (
-                            <>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={() => handleDelete(po._id, po.poNumber)}
-                                className="text-destructive focus:text-destructive"
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Delete
-                              </DropdownMenuItem>
-                            </>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                )
-              )}
-              {purchaseOrders.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
-                    No purchase orders found
-                  </TableCell>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/30">
+                  <TableHead className="text-xs">Order</TableHead>
+                  <TableHead className="text-xs">Supplier</TableHead>
+                  <TableHead className="hidden text-xs lg:table-cell">Items</TableHead>
+                  <TableHead className="text-right text-xs">Total</TableHead>
+                  <TableHead className="hidden text-xs md:table-cell">Needed by</TableHead>
+                  <TableHead className="text-xs">Status</TableHead>
+                  <TableHead className="w-36" />
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {rows.map((po) => (
+                  <PoRow key={po._id} po={po} onOpen={() => setSelectedId(po._id)} />
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         )}
+        <Pager page={page} totalPages={data?.pagination?.totalPages ?? 1} total={data?.pagination?.total ?? 0} onPage={setPage} />
       </div>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <p className="text-xs text-muted-foreground">
-            Page {page} of {totalPages} ({total} items)
-          </p>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page <= 1}
-              onClick={() => setPage(page - 1)}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page >= totalPages}
-              onClick={() => setPage(page + 1)}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
+      {draft && (
+        <PurchaseOrderDialog
+          key={draft.key}
+          open
+          draft={draft.value}
+          onOpenChange={(o) => !o && setDraft(null)}
+          onSaved={(po) => setSelectedId(po._id)}
+        />
       )}
+      <PurchaseOrderView
+        id={selectedId}
+        onClose={() => setSelectedId(undefined)}
+        onEdit={(po) => {
+          setSelectedId(undefined);
+          setDraft({ key: `e${po._id}${Date.now()}`, value: { editing: po } });
+        }}
+      />
+    </div>
+  );
+}
 
-      {/* Create Dialog */}
-      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>New Purchase Order</DialogTitle>
-          </DialogHeader>
-          <PurchaseOrderForm onSuccess={() => setCreateDialogOpen(false)} />
-        </DialogContent>
-      </Dialog>
+function PoRow({ po, onOpen }: { po: PurchaseOrder; onOpen: () => void }) {
+  const approve = useUpdatePurchaseOrderStatus();
+  const [today] = useState(() => new Date(new Date().toDateString()));
+  const late = po.status === "approved" && po.expectedDelivery && new Date(po.expectedDelivery) < today;
+  const names = po.items.map((i) => i.productName);
 
-      {/* Detail Dialog */}
-      <Dialog open={!!detailPO} onOpenChange={(open) => !open && setDetailPO(null)}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="font-mono">
-              {detailPO?.poNumber as string}
-            </DialogTitle>
-          </DialogHeader>
-          {detailPO && (
-            <PurchaseOrderDetail
-            poId={detailPO._id as string}
-            onStatusChange={handleStatusChange}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+  return (
+    <TableRow className="cursor-pointer hover:bg-muted/40" onClick={onOpen}>
+      <TableCell>
+        <p className="font-mono text-xs font-medium">{po.poNumber}</p>
+        <p className="text-[11px] text-muted-foreground">{format(new Date(po.createdAt), "d MMM yyyy")}</p>
+      </TableCell>
+      <TableCell className="text-sm font-medium">{po.vendor?.name ?? "—"}</TableCell>
+      <TableCell className="hidden max-w-56 text-xs text-muted-foreground lg:table-cell">
+        <span className="line-clamp-2">
+          {names.slice(0, 2).join(", ")}
+          {names.length > 2 ? ` +${names.length - 2} more` : ""}
+        </span>
+      </TableCell>
+      <TableCell className="text-right text-sm font-semibold tabular-nums">{formatINR(po.totalAmount)}</TableCell>
+      <TableCell className={cn("hidden text-xs md:table-cell", late ? "font-medium text-red-600 dark:text-red-400" : "text-muted-foreground")}>
+        {po.expectedDelivery && po.status !== "rejected" ? format(new Date(po.expectedDelivery), "d MMM") : "—"}
+        {late && " · late"}
+      </TableCell>
+      <TableCell>
+        <PoStatusBadge status={po.status} />
+      </TableCell>
+      <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+        {po.status === "pending" && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs"
+            disabled={approve.isPending}
+            onClick={() =>
+              approve.mutate(
+                { id: po._id, status: "approved" },
+                {
+                  onSuccess: () => toast.success(`${po.poNumber} approved — send it to ${po.vendor.name}`),
+                  onError: (e) => toast.error(getErrorMessage(e, "Couldn't approve")),
+                }
+              )
+            }
+          >
+            {approve.isPending ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <CheckCircle className="mr-1 h-3 w-3" />}
+            Approve
+          </Button>
+        )}
+        {po.status === "approved" && (
+          <Button size="sm" className="h-7 text-xs" asChild>
+            <Link to={`/purchase-bills?po=${po._id}`}>
+              <ReceiptText className="mr-1 h-3 w-3" />
+              Goods arrived
+            </Link>
+          </Button>
+        )}
+      </TableCell>
+    </TableRow>
+  );
+}
+
+/** Low-stock products grouped by their usual supplier, each a click from a draft PO. */
+function ReorderPanel({
+  suggestions,
+  onDraft,
+}: {
+  suggestions: ReorderSuggestion[];
+  onDraft: (vendor: { _id: string; name: string } | null, items: ReorderSuggestion[]) => void;
+}) {
+  if (!suggestions.length) return null;
+  const groups = new Map<string, { vendor: { _id: string; name: string } | null; items: ReorderSuggestion[] }>();
+  for (const s of suggestions) {
+    const key = s.vendor?._id ?? "none";
+    const g = groups.get(key) ?? { vendor: s.vendor, items: [] };
+    g.items.push(s);
+    groups.set(key, g);
+  }
+  const list = [...groups.values()].sort((a, b) => (a.vendor ? 0 : 1) - (b.vendor ? 0 : 1));
+
+  return (
+    <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4">
+      <div className="mb-3 flex items-center gap-2">
+        <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+        <p className="text-sm font-semibold">
+          {suggestions.length} product{suggestions.length === 1 ? " is" : "s are"} running low
+        </p>
+        <span className="text-xs text-muted-foreground">(already on order is taken into account)</span>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {list.map((g) => {
+          const total = g.items.reduce((s, i) => s + i.quantity * i.unitCost, 0);
+          return (
+            <div key={g.vendor?._id ?? "none"} className="flex flex-col justify-between gap-2 rounded-lg border border-border/60 bg-card p-3">
+              <div>
+                <p className="text-sm font-medium">{g.vendor?.name ?? "No usual supplier set"}</p>
+                <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+                  {g.items.slice(0, 3).map((i) => (
+                    <li key={i.product} className="flex justify-between gap-2">
+                      <span className="truncate">{i.name}</span>
+                      <span className="shrink-0 tabular-nums">
+                        {i.stock} {i.baseUnit} left → {i.quantity} {i.unit}
+                      </span>
+                    </li>
+                  ))}
+                  {g.items.length > 3 && <li>+{g.items.length - 3} more</li>}
+                </ul>
+              </div>
+              <Button size="sm" variant="outline" className="h-7 self-start text-xs" onClick={() => onDraft(g.vendor, g.items)}>
+                <Sparkles className="mr-1 h-3 w-3" />
+                Draft PO · ~{formatINR(total)}
+              </Button>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

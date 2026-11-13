@@ -23,6 +23,8 @@ interface VendorFormData {
   contactPerson?: string;
   email?: string;
   phone?: string;
+  gstin?: string;
+  paymentTermsDays?: string;
 }
 
 export default function VendorsPage() {
@@ -42,15 +44,29 @@ const totalPages = data?.totalPages || Math.ceil(total / 15) || 1;
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<VendorFormData>();
 
-  const openCreate = () => { setEditing(null); reset({ name: "", contactPerson: "", email: "", phone: "" }); setDialogOpen(true); };
+  const openCreate = () => { setEditing(null); reset({ name: "", contactPerson: "", email: "", phone: "", gstin: "", paymentTermsDays: "30" }); setDialogOpen(true); };
   const openEdit = (v: Record<string, unknown>) => {
     setEditing(v);
-    reset({ name: v.name as string, contactPerson: (v.contactPerson as string) || "", email: (v.email as string) || "", phone: (v.phone as string) || "" });
+    reset({
+      name: v.name as string,
+      contactPerson: (v.contactPerson as string) || "",
+      email: (v.email as string) || "",
+      phone: (v.phone as string) || "",
+      gstin: (v.gstin as string) || "",
+      paymentTermsDays: String(v.paymentTermsDays ?? 30),
+    });
     setDialogOpen(true);
   };
 
   const onSubmit = (data: VendorFormData) => {
-    const payload = { ...data, email: data.email || undefined, phone: data.phone || undefined, contactPerson: data.contactPerson || undefined };
+    const payload = {
+      ...data,
+      email: data.email || undefined,
+      phone: data.phone || undefined,
+      contactPerson: data.contactPerson || undefined,
+      gstin: data.gstin?.trim().toUpperCase() || undefined,
+      paymentTermsDays: data.paymentTermsDays ? Number(data.paymentTermsDays) : undefined,
+    };
     if (editing) {
       updateVendor.mutate({ id: editing._id as string, ...payload }, {
         onSuccess: () => { toast.success("Vendor updated"); setDialogOpen(false); },
@@ -145,7 +161,7 @@ const totalPages = data?.totalPages || Math.ceil(total / 15) || 1;
           <DialogHeader><DialogTitle>{editing ? "Edit Vendor" : "Add Vendor"}</DialogTitle></DialogHeader>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="v-name">name *</Label>
+              <Label htmlFor="v-name">Name *</Label>
               <Input id="v-name" {...register("name", { required: "Required", minLength: { value: 2, message: "Min 2 chars" } })} />
               {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
             </div>
@@ -161,6 +177,29 @@ const totalPages = data?.totalPages || Math.ceil(total / 15) || 1;
               <div className="space-y-2">
                 <Label htmlFor="v-phone">Phone</Label>
                 <Input id="v-phone" {...register("phone")} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="v-gstin">GSTIN</Label>
+                <Input
+                  id="v-gstin"
+                  placeholder="27AABCM1234E1Z2"
+                  className="uppercase"
+                  {...register("gstin", {
+                    pattern: { value: /^$|^[0-9]{2}[A-Za-z]{5}[0-9]{4}[A-Za-z][1-9A-Za-z][Zz][0-9A-Za-z]$/, message: "Not a valid GSTIN" },
+                  })}
+                />
+                {errors.gstin ? (
+                  <p className="text-xs text-destructive">{errors.gstin.message}</p>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground">Decides CGST+SGST or IGST on bills</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="v-terms">Pay within (days)</Label>
+                <Input id="v-terms" inputMode="numeric" {...register("paymentTermsDays", { pattern: { value: /^\d{0,3}$/, message: "Days, 0–365" } })} />
+                {errors.paymentTermsDays && <p className="text-xs text-destructive">{errors.paymentTermsDays.message}</p>}
               </div>
             </div>
             <div className="flex justify-end">

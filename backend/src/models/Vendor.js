@@ -81,6 +81,27 @@ const vendorSchema = new mongoose.Schema(
       default: "Immediate", // e.g. "Net 30", "Net 60", "50% advance"
     },
 
+    // GST state (used when there is no GSTIN) — decides CGST+SGST vs IGST on bills
+    stateCode: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    // Days to pay a bill; sets each purchase bill's due date
+    paymentTermsDays: {
+      type: Number,
+      min: [0, "Payment terms can't be negative"],
+      max: [365, "Payment terms can be at most 365 days"],
+      default: 30,
+    },
+
+    // What we owe this supplier: always the sum of their bills' balanceDue
+    outstanding: {
+      type: Number,
+      default: 0,
+    },
+
     notes: {
       type: String,
       trim: true,

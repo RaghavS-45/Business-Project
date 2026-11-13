@@ -60,6 +60,19 @@ export const createVendorSchema = z.object({
     .optional()
     .default("Immediate"),
 
+  stateCode: z
+    .string()
+    .trim()
+    .regex(/^(\d{2})?$/, "State code must be 2 digits")
+    .optional(),
+
+  paymentTermsDays: z.coerce
+    .number()
+    .int()
+    .min(0, "Payment terms can't be negative")
+    .max(365, "Payment terms can be at most 365 days")
+    .optional(),
+
   notes: z
     .string()
     .trim()
