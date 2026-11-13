@@ -1,3 +1,4 @@
+import { containsRegex } from "../utils/search.js";
 import Customer from "../models/Customer.js";
 import ApiError from "../utils/ApiError.js";
 import logger from "../config/logger.js";
@@ -47,7 +48,11 @@ class CustomerService {
     const { page, limit, search, isActive, sortBy, sortOrder } = query;
 
     const filter = { isActive };
-    if (search) filter.$text = { $search: search };
+    if (search) {
+      // Partial match on name, phone, email or GSTIN
+      const re = containsRegex(search);
+      filter.$or = [{ name: re }, { phone: re }, { email: re }, { gstin: re }];
+    }
 
     const sortObj = { [sortBy]: sortOrder === "asc" ? 1 : -1 };
     const skip = (page - 1) * limit;

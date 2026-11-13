@@ -14,6 +14,7 @@ import settingsService from "./settings.service.js";
 import returnService from "./return.service.js";
 import { splitTax, stateInfo, stateFromGstin } from "../utils/gst.js";
 import { sellingUnit, validQuantity, allowsDecimal, resolveLine } from "../utils/unitPricing.js";
+import { containsRegex } from "../utils/search.js";
 
 /**
  * Sale Service — Checkout Pipeline with Mongoose Transactions
@@ -478,6 +479,7 @@ class SaleService {
       status,
       paymentStatus,
       paymentMethod,
+      search,
       customerId,
       cashierId,
       startDate,
@@ -493,6 +495,11 @@ class SaleService {
     if (paymentMethod) filter.paymentMethod = paymentMethod;
     if (customerId) filter.customer = customerId;
     if (cashierId) filter.cashier = cashierId;
+    if (search) {
+      // Invoice number ("0046" finds INV-20261113-0046) or customer name
+      const re = containsRegex(search);
+      filter.$or = [{ invoiceNumber: re }, { "buyer.name": re }];
+    }
 
     if (startDate || endDate) {
       filter.createdAt = {};

@@ -1,4 +1,5 @@
 import bwipjs from "bwip-js";
+import { containsRegex } from "../utils/search.js";
 import Product from "../models/Product.js";
 import cloudinary from "../config/cloudinary.js";
 import ApiError from "../utils/ApiError.js";
@@ -117,8 +118,9 @@ class ProductService {
     if (category) filter.category = category;
 
     if (search) {
-      // Full-text search on name + description (uses the text index)
-      filter.$text = { $search: search };
+      // Partial match as you type: "sug" finds "Sugar"
+      const re = containsRegex(search);
+      filter.$or = [{ name: re }, { sku: re }, { barcode: re }, { hsnCode: re }];
     }
 
     if (lowStock) {

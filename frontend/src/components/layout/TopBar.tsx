@@ -11,8 +11,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, Moon, Sun, Menu } from "lucide-react";
-import { useTheme } from "@/hooks/useTheme";
+import { LogOut, Moon, Sun, Menu, Palette, Check, Search } from "lucide-react";
+import { openCommandPalette } from "@/lib/commandPalette";
+
+const shortcutLabel = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘K" : "Ctrl K";
+import { useTheme, PALETTES } from "@/hooks/useTheme";
 
 interface TopBarProps {
   onMenuClick: () => void;
@@ -22,7 +25,7 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
   const user = useAuthStore((s) => s.user);
   const firstName = user?.name?.trim().split(" ")[0];
   const logoutMutation = useLogout();
-  const { theme, toggle } = useTheme();
+  const { theme, toggle, palette, setPalette } = useTheme();
   const isDark = theme === "dark";
 
   const initials = user?.name
@@ -67,6 +70,55 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
       </div>
 
       <div className="flex items-center gap-3">
+        {/* Search / command palette */}
+        <button
+          type="button"
+          onClick={openCommandPalette}
+          className="hidden md:flex h-9 w-64 items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <Search className="h-4 w-4" />
+          <span className="flex-1 text-left">Search or jump to…</span>
+          <kbd className="rounded border border-border bg-background px-1.5 text-[10px] font-medium">{shortcutLabel}</kbd>
+        </button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="md:hidden text-muted-foreground"
+          onClick={openCommandPalette}
+          aria-label="Search"
+        >
+          <Search className="h-4 w-4" />
+        </Button>
+
+        {/* Colour palette */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Change colour palette"
+              title="Colour palette"
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <Palette className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52">
+            <DropdownMenuLabel className="text-xs text-muted-foreground">Colour palette</DropdownMenuLabel>
+            {PALETTES.map((p) => (
+              <DropdownMenuItem key={p.id} onClick={() => setPalette(p.id)} className="gap-3">
+                <span className="flex -space-x-1.5">
+                  {p.swatches.map((c) => (
+                    <span key={c} className="h-5 w-5 rounded-full ring-2 ring-popover" style={{ background: c }} />
+                  ))}
+                </span>
+                <span className="flex-1">{p.name}</span>
+                {palette === p.id && <Check className="h-4 w-4 text-primary" />}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
         {/* Theme toggle */}
         <Button
           variant="ghost"
@@ -87,7 +139,7 @@ export default function TopBar({ onMenuClick }: TopBarProps) {
               className="flex items-center gap-2 pl-2 pr-3 hover:bg-accent/50"
             >
               <Avatar className="h-8 w-8">
-                <AvatarFallback className="bg-gradient-to-br from-blue-500 to-blue-600 text-white text-xs font-bold">
+                <AvatarFallback className="bg-brand text-brand-foreground text-xs font-bold">
                   {initials}
                 </AvatarFallback>
               </Avatar>

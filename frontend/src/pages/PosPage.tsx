@@ -272,7 +272,7 @@ export default function PosPage() {
               size="sm"
               className={`shrink-0 text-xs ${
                 selectedCategory === cat
-                  ? "bg-blue-500 hover:bg-blue-600 text-white"
+                  ? "bg-primary hover:bg-primary/90 text-primary-foreground"
                   : ""
               }`}
               onClick={() => setSelectedCategory(cat)}
@@ -390,7 +390,7 @@ export default function PosPage() {
   <CardHeader className="shrink-0 pb-3 space-y-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2">
-              <ShoppingCart className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+              <ShoppingCart className="h-4 w-4 text-primary" />
               Cart ({cartItems.length})
             </CardTitle>
             {cartItems.length > 0 && (
@@ -432,7 +432,7 @@ export default function PosPage() {
                     >
                       <span>Walk-in Customer</span>
                       {!selectedCustomer && (
-                        <Check className="ml-auto h-4 w-4 text-blue-600 dark:text-blue-400" />
+                        <Check className="ml-auto h-4 w-4 text-primary" />
                       )}
                     </CommandItem>
                     {customers.map(
@@ -451,7 +451,7 @@ export default function PosPage() {
                             </span>
                           )}
                           {selectedCustomer === c._id && (
-                            <Check className="ml-auto h-4 w-4 text-blue-600 dark:text-blue-400" />
+                            <Check className="ml-auto h-4 w-4 text-primary" />
                           )}
                         </CommandItem>
                       )
@@ -535,7 +535,7 @@ export default function PosPage() {
               <Separator className="my-2" />
               <div className="flex justify-between text-lg font-bold">
                 <span>Total</span>
-                <span className="text-blue-600 dark:text-blue-400">
+                <span className="text-primary">
                   {formatINR(grandTotal)}
                 </span>
               </div>
@@ -573,13 +573,13 @@ export default function PosPage() {
 
             <Button
               onClick={() => setCheckoutOpen(true)}
-              className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-lg shadow-blue-500/25 h-12 text-base font-semibold"
+              className="w-full bg-brand-fill text-brand-foreground hover:brightness-105 shadow-md h-12 text-base font-semibold"
             >
               <ShoppingCart className="mr-2 h-5 w-5" />
               Checkout — {formatINR(grandTotal)}
               <Badge
                 variant="outline"
-                className="ml-2 text-[10px] border-white/20 text-white/70"
+                className="ml-2 text-[10px] border-brand-foreground/25 text-brand-foreground/70"
               >
                 F9
               </Badge>
@@ -626,7 +626,7 @@ export default function PosPage() {
               </div>
               <div className="flex justify-between text-lg font-bold pt-2">
                 <span>Grand Total</span>
-                <span className="text-blue-600 dark:text-blue-400">
+                <span className="text-primary">
                   {formatINR(grandTotal)}
                 </span>
               </div>
@@ -682,7 +682,7 @@ export default function PosPage() {
             <Button
               onClick={handleCheckout}
               disabled={checkoutMutation.isPending || !!creditProblem}
-              className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white"
+              
             >
               {checkoutMutation.isPending ? (
                 <>

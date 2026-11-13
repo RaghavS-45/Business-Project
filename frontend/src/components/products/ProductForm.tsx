@@ -334,7 +334,7 @@ export default function ProductForm({ defaultValues, onSuccess }: ProductFormPro
       </div>
 
       <div className="flex justify-end gap-3 pt-2">
-        <Button type="submit" disabled={isPending} className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white">
+        <Button type="submit" disabled={isPending} >
           {isPending ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />

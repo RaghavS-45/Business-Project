@@ -21,7 +21,7 @@ const RANGES = [
 ] as const;
 
 const TYPE_STYLE: Record<string, string> = {
-  INVOICE: "bg-blue-500/10 text-blue-700 dark:text-blue-400",
+  INVOICE: "bg-primary/10 text-primary",
   PAYMENT: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
   CREDIT_NOTE: "bg-amber-500/10 text-amber-700 dark:text-amber-400",
   REFUND: "bg-muted text-muted-foreground",

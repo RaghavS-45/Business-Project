@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useCustomers, useCreateCustomer, useUpdateCustomer, useDeleteCustomer } from "@/hooks/useCustomers";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,7 +23,7 @@ import StateSelect, { GSTIN_PATTERN } from "@/components/gst/StateSelect";
 import RecordPaymentDialog from "@/components/receivables/RecordPaymentDialog";
 import { LEVEL_LABELS, PRICE_LEVELS, type PriceLevel } from "@/lib/unitPricing";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
 
 interface CustomerFormData {
@@ -82,6 +82,20 @@ export default function CustomersPage() {
     setDialogOpen(true);
   };
 
+  // Links from the command palette: ?search=…, ?new=1
+  const [params] = useSearchParams();
+  const paramSearch = params.get("search");
+  const paramNew = params.get("new");
+  useEffect(() => {
+    if (paramSearch !== null) {
+      setSearch(paramSearch);
+      setPage(1);
+    }
+    if (paramNew) {
+      openCreate();
+    }
+  }, [paramSearch, paramNew, params.get("t")]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const onSubmit = (data: CustomerFormData) => {
     const payload = {
       ...data,
@@ -126,7 +140,7 @@ export default function CustomersPage() {
           <h1 className="text-2xl font-bold tracking-tight">Customers</h1>
           <p className="text-sm text-muted-foreground mt-1">{total} customers</p>
         </div>
-        <Button onClick={openCreate} className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-md shadow-blue-500/20">
+        <Button onClick={openCreate} >
           <Plus className="mr-2 h-4 w-4" />Add Customer
         </Button>
       </div>
@@ -169,7 +183,7 @@ export default function CustomersPage() {
                   <TableCell className="text-xs text-muted-foreground hidden lg:table-cell">{c.email || "—"}</TableCell>
                   <TableCell className="text-xs text-muted-foreground hidden sm:table-cell">{c.phone || "—"}</TableCell>
                   <TableCell className="text-right hidden md:table-cell">
-                    <Badge variant="outline" className="text-[10px] text-blue-600 dark:text-blue-400 border-blue-500/20">{c.loyaltyPoints} pts</Badge>
+                    <Badge variant="outline" className="text-[10px] text-primary border-primary/20">{c.loyaltyPoints} pts</Badge>
                   </TableCell>
                   <TableCell className="text-right text-sm font-medium hidden md:table-cell">{formatINR(c.totalPurchases || 0)}</TableCell>
                   <TableCell className="text-right text-sm tabular-nums">
@@ -323,7 +337,7 @@ export default function CustomersPage() {
               <Input id="c-notes" {...register("notes")} placeholder="Optional" />
             </div>
             <div className="flex justify-end">
-              <Button type="submit" disabled={isPending} className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
+              <Button type="submit" disabled={isPending} >
                 {isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving...</> : editing ? "Update" : "Create"}
               </Button>
             </div>

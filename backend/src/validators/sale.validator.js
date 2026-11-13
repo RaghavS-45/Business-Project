@@ -66,7 +66,8 @@ export const saleQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
   status: z.enum(["COMPLETED", "PARTIALLY_RETURNED", "REFUNDED", "VOID"]).optional(),
   paymentStatus: z.enum(["PAID", "PARTIAL", "UNPAID", "REFUNDED"]).optional(),
-  paymentMethod: z.enum(["CASH", "CARD", "UPI", "OTHER"]).optional(),
+  paymentMethod: z.enum(["CASH", "CARD", "UPI", "OTHER", "CREDIT"]).optional(),
+  search: z.string().trim().max(100).optional(),
   customerId: z
     .string()
     .regex(/^[a-fA-F0-9]{24}$/)

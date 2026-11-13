@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Package, Eye, EyeOff, Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
+import BrandMark from "@/components/brand/BrandMark";
 
 const loginSchema = z.object({
   email: z.email("Enter a valid email address"),
@@ -41,31 +42,59 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background">
-      {/* Animated gradient background */}
-      <div className="absolute inset-0 -z-10">
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-950/50 via-background to-blue-950/30" />
-        <div className="absolute top-1/4 -left-20 h-72 w-72 rounded-full bg-blue-500/10 blur-3xl animate-pulse" />
-        <div className="absolute bottom-1/4 -right-20 h-96 w-96 rounded-full bg-blue-500/10 blur-3xl animate-pulse [animation-delay:1s]" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-64 w-64 rounded-full bg-blue-500/5 blur-3xl animate-pulse [animation-delay:2s]" />
-      </div>
+    <div className="grid min-h-screen bg-background lg:grid-cols-[1.05fr_1fr]">
+      {/* Brand panel — a ledger page */}
+      <aside className="relative hidden overflow-hidden bg-sidebar-fill text-sidebar-foreground lg:flex lg:flex-col lg:justify-between lg:p-12">
+        {/* ruled lines + margin rule, like an account book */}
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 opacity-[0.07]"
+          style={{
+            backgroundImage:
+              "repeating-linear-gradient(to bottom, transparent 0 35px, currentColor 35px 36px)",
+          }}
+        />
+        <div aria-hidden="true" className="absolute inset-y-0 left-24 w-px bg-brand/40" />
+        <div aria-hidden="true" className="absolute -right-24 -bottom-24 h-80 w-80 rounded-full bg-brand/15 blur-3xl" />
 
-      <Card className="w-full max-w-md mx-4 border-border/50 bg-card/80 backdrop-blur-xl shadow-2xl shadow-blue-500/5">
-        <CardHeader className="text-center space-y-4 pb-2">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg shadow-blue-500/25">
-            <Package className="h-8 w-8 text-white" />
-          </div>
+        <div className="relative flex items-center gap-3">
+          <BrandMark className="h-10 w-10" />
+          <span className="font-heading text-lg font-bold text-sidebar-accent-foreground">Inventory POS</span>
+        </div>
+
+        <div className="relative max-w-md">
+          <p className="font-heading text-4xl font-bold leading-[1.1] text-sidebar-accent-foreground">
+            Every sale, every rupee,
+            <br />
+            <span className="text-brand">in one ledger.</span>
+          </p>
+          <ul className="mt-8 space-y-3 text-sm text-sidebar-foreground/80">
+            {["GST invoices with CGST, SGST & IGST", "Credit, dues and customer statements", "Stock in pieces, cartons or kilos"].map((t) => (
+              <li key={t} className="flex items-center gap-3">
+                <span className="h-1.5 w-1.5 rounded-full bg-brand" />
+                {t}
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <p className="relative text-xs text-sidebar-foreground/50">Billing &amp; inventory for wholesale</p>
+      </aside>
+
+      {/* Sign-in form */}
+      <main className="flex items-center justify-center px-4 py-12">
+      <Card className="w-full max-w-sm border-0 bg-transparent shadow-none ring-0">
+        <CardHeader className="space-y-4 pb-2 px-0">
+          <BrandMark className="h-11 w-11 lg:hidden" />
           <div>
-            <CardTitle className="text-2xl font-bold tracking-tight">
-              Inventory POS
-            </CardTitle>
+            <CardTitle className="font-heading text-3xl font-bold">Welcome back</CardTitle>
             <CardDescription className="mt-1.5 text-muted-foreground">
-              Sign in to your account to continue
+              Sign in to continue to your store
             </CardDescription>
           </div>
         </CardHeader>
 
-        <CardContent className="pt-4">
+        <CardContent className="pt-4 px-0">
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -123,7 +152,7 @@ export default function LoginPage() {
 
             <Button
               type="submit"
-              className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-lg shadow-blue-500/25 transition-all duration-200"
+              className="w-full bg-brand-fill text-brand-foreground font-semibold shadow-md hover:brightness-105"
               disabled={loginMutation.isPending}
               size="lg"
             >
@@ -138,13 +167,12 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <div className="mt-6 text-center">
-            <p className="text-xs text-muted-foreground">
-              Use your admin credentials or ask your manager for access.
-            </p>
-          </div>
+          <p className="mt-6 text-xs text-muted-foreground">
+            Use your admin credentials or ask your manager for access.
+          </p>
         </CardContent>
       </Card>
+      </main>
     </div>
   );
 }

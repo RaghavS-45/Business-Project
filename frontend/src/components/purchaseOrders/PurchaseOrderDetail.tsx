@@ -27,7 +27,7 @@ function statusBadge(status: string) {
     case "pending":
       return <Badge className="text-xs bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20">Pending</Badge>;
     case "approved":
-      return <Badge className="text-xs bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20">Approved</Badge>;
+      return <Badge className="text-xs bg-primary/10 text-primary border-primary/20">Approved</Badge>;
     case "received":
       return <Badge className="text-xs bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20">Received</Badge>;
     case "rejected":
@@ -200,7 +200,7 @@ export default function PurchaseOrderDetail({ poId, onStatusChange }: Props) {
           <>
             <Button
               size="sm"
-              className="bg-gradient-to-r from-blue-500 to-blue-600 text-white"
+              
               onClick={() => onStatusChange(po._id, "approved", po.poNumber)}
             >
               <CheckCircle className="mr-2 h-4 w-4" />
@@ -220,7 +220,7 @@ export default function PurchaseOrderDetail({ poId, onStatusChange }: Props) {
         {po.status === "approved" && (
           <Button
             size="sm"
-            className="bg-gradient-to-r from-emerald-500 to-teal-600 text-white"
+            className="bg-success text-white hover:bg-success/90"
             onClick={() => onStatusChange(po._id, "received", po.poNumber)}
           >
             <PackageCheck className="mr-2 h-4 w-4" />

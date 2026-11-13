@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import TopBar from "./TopBar";
+import CommandPalette from "@/components/command/CommandPalette";
 import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 
@@ -25,7 +26,7 @@ export default function AppLayout() {
 
       {/* Mobile sidebar (Sheet) */}
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent side="left" className="w-[260px] sm:max-w-[260px] p-0 gap-0">
+        <SheetContent side="left" className="w-[260px] sm:max-w-[260px] p-0 gap-0 border-sidebar-border bg-sidebar-fill [&>button]:text-sidebar-foreground">
           <SheetTitle className="sr-only">Navigation</SheetTitle>
           <Sidebar
             mobile
@@ -47,6 +48,7 @@ export default function AppLayout() {
         <main className="p-4 lg:p-6">
           <Outlet />
         </main>
+        <CommandPalette />
       </div>
     </div>
   );

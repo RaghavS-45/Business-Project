@@ -45,9 +45,9 @@ export default function InstallPrompt() {
 
   return (
     <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 w-[90%] max-w-md">
-      <div className="flex items-center gap-3 rounded-xl border border-blue-500/20 bg-card/95 backdrop-blur-xl p-4 shadow-2xl shadow-blue-500/10">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-blue-600">
-          <Download className="h-5 w-5 text-white" />
+      <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 shadow-xl">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand text-brand-foreground">
+          <Download className="h-5 w-5" />
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold">Install POS App</p>
@@ -58,7 +58,7 @@ export default function InstallPrompt() {
         <Button
           size="sm"
           onClick={handleInstall}
-          className="shrink-0 bg-blue-500 hover:bg-blue-600 text-white"
+          className="shrink-0"
         >
           Install
         </Button>

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useSales, useSale, useSaleReturns } from "@/hooks/useSales";
 import ReturnDialog from "@/components/sales/ReturnDialog";
 import { openPdf } from "@/lib/pdf";
@@ -40,6 +41,14 @@ export default function SalesPage() {
   const [status, setStatus] = useState("All");
   const [paymentFilter, setPaymentFilter] = useState("All");
   const [selectedId, setSelectedId] = useState<string | undefined>();
+  // Link from the command palette: ?sale=<id> opens that sale (once per link)
+  const [params] = useSearchParams();
+  const linkKey = params.toString();
+  const [handledLink, setHandledLink] = useState("");
+  if (params.get("sale") && linkKey !== handledLink) {
+    setHandledLink(linkKey);
+    setSelectedId(params.get("sale") ?? undefined);
+  }
   const [returnOpen, setReturnOpen] = useState(false);
   const [pdfLoading, setPdfLoading] = useState<string | null>(null);
 
@@ -385,7 +394,7 @@ export default function SalesPage() {
                 <Separator className="my-2" />
                 <div className="flex justify-between text-lg font-bold">
                   <span>Grand Total</span>
-                  <span className="text-blue-600 dark:text-blue-400">{formatCurrency(saleDetail.grandTotal)}</span>
+                  <span className="text-primary">{formatCurrency(saleDetail.grandTotal)}</span>
                 </div>
                 {(saleDetail.balanceDue > 0 || saleDetail.paymentMethod === "CREDIT" || saleDetail.paymentStatus === "PARTIAL") && (
                   <div className="mt-2 rounded-lg bg-muted/50 px-3 py-2 space-y-1">

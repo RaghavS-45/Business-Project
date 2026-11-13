@@ -23,8 +23,9 @@ import {
 } from "@/components/ui/table";
 import {
   IndianRupee, ShoppingCart, AlertTriangle,
-  Package, CalendarIcon, X,
+  Package, CalendarIcon, X, Wallet,
 } from "lucide-react";
+import { useAuthStore } from "@/stores/authStore";
 import { format, subDays, startOfDay, endOfDay, eachDayOfInterval, isSameDay, formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -36,7 +37,12 @@ const PRESETS = [
   { label: "Last 30 days", range: () => ({ from: subDays(new Date(), 29), to: new Date() }) },
 ];
 
+const greetingFor = (hour: number) =>
+  hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+
 export default function DashboardPage() {
+  const firstName = useAuthStore((s) => s.user?.name?.trim().split(" ")[0]);
+  const greeting = greetingFor(new Date().getHours());
   const [dateRange, setDateRange] = useState<DateRange>(null);
   const [calOpen, setCalOpen] = useState(false);
   const [selecting, setSelecting] = useState<"from" | "to">("from");
@@ -101,14 +107,54 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header + Date Filter */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Overview of your store performance
-          </p>
+      {/* Welcome banner */}
+      <section className="relative overflow-hidden rounded-2xl bg-hero-fill px-6 py-7 text-white shadow-lg sm:px-8">
+        <div aria-hidden="true" className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-white/10 blur-2xl" />
+        <div aria-hidden="true" className="pointer-events-none absolute right-24 -bottom-24 h-56 w-56 rounded-full bg-brand/30 blur-3xl" />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 opacity-[0.06]"
+          style={{ backgroundImage: "radial-gradient(currentColor 1px, transparent 1px)", backgroundSize: "18px 18px" }}
+        />
+        <div className="relative flex flex-wrap items-end justify-between gap-6">
+          <div>
+            <p className="text-sm font-medium text-white/75">
+              {greeting}
+              {firstName ? `, ${firstName}` : ""} 👋
+            </p>
+            <h1 className="mt-1 font-heading text-2xl font-bold sm:text-3xl">
+              {summary
+                ? `${formatCurrency(summary.totalRevenue || 0)} in sales ${dateRange ? "this period" : "today"}`
+                : "Here's your store today"}
+            </h1>
+            <p className="mt-1 text-sm text-white/70">
+              {summary?.saleCount || 0} bill{summary?.saleCount === 1 ? "" : "s"} so far ·{" "}
+              {(lowStock?.length || 0) > 0 ? `${lowStock?.length} item${lowStock?.length === 1 ? "" : "s"} running low` : "stock looks healthy"}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild className="bg-brand-fill text-brand-foreground font-semibold shadow-md hover:brightness-105">
+              <Link to="/pos">
+                <ShoppingCart className="mr-1.5 h-4 w-4" /> New sale
+              </Link>
+            </Button>
+            <Button asChild variant="ghost" className="bg-white/15 text-white backdrop-blur hover:bg-white/25 hover:text-white">
+              <Link to="/receivables">
+                <Wallet className="mr-1.5 h-4 w-4" /> Collect dues
+              </Link>
+            </Button>
+            <Button asChild variant="ghost" className="bg-white/15 text-white backdrop-blur hover:bg-white/25 hover:text-white">
+              <Link to="/products">
+                <Package className="mr-1.5 h-4 w-4" /> Products
+              </Link>
+            </Button>
+          </div>
         </div>
+      </section>
+
+      {/* Date filter */}
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <h2 className="text-lg font-semibold">Overview</h2>
 
         <div className="flex items-center gap-2 flex-wrap">
           {/* Presets */}
@@ -132,7 +178,7 @@ export default function DashboardPage() {
                 size="sm"
                 className={cn(
                   "text-xs h-8 gap-2",
-                  dateRange && "border-blue-500/50 text-blue-600 dark:text-blue-400"
+                  dateRange && "border-primary/50 text-primary"
                 )}
               >
                 <CalendarIcon className="h-3.5 w-3.5" />

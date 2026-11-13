@@ -1,20 +1,10 @@
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuthStore } from "@/stores/authStore";
-import {
-  LayoutDashboard,
-  Package,
-  ShoppingCart,
-  Receipt,
-  Users,
-  Truck,
-  ChevronLeft,
-  ChevronRight,
-  UserCog,
-  ClipboardList,
-  Settings,
-  Wallet,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { navItems, SECTIONS } from "./navItems";
+import BrandMark from "@/components/brand/BrandMark";
+import { useStoreSettings } from "@/hooks/useSettings";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
@@ -26,83 +16,10 @@ interface SidebarProps {
   onNavigate?: () => void;
 }
 
-const SECTIONS = ["Overview", "Sell", "Inventory", "Admin"] as const;
-
-const navItems = [
-  {
-    label: "Dashboard",
-    section: "Overview",
-    icon: LayoutDashboard,
-    path: "/",
-    roles: ["ADMIN", "MANAGER"],
-  },
-  {
-    label: "Products",
-    section: "Inventory",
-    icon: Package,
-    path: "/products",
-    roles: ["ADMIN", "MANAGER"],
-  },
-  {
-    label: "POS Terminal",
-    section: "Sell",
-    icon: ShoppingCart,
-    path: "/pos",
-    roles: ["ADMIN", "MANAGER", "CASHIER"],
-  },
-  {
-    label: "Sales",
-    section: "Sell",
-    icon: Receipt,
-    path: "/sales",
-    roles: ["ADMIN", "MANAGER"],
-  },
-  {
-    label: "Customers",
-    section: "Sell",
-    icon: Users,
-    path: "/customers",
-    roles: ["ADMIN", "MANAGER", "CASHIER"],
-  },
-  {
-    label: "Dues",
-    section: "Sell",
-    icon: Wallet,
-    path: "/receivables",
-    roles: ["ADMIN", "MANAGER"],
-  },
-  {
-    label: "Vendors",
-    section: "Inventory",
-    icon: Truck,
-    path: "/vendors",
-    roles: ["ADMIN", "MANAGER"],
-  },
-  {
-    label: "Purchase Orders",
-    section: "Inventory",
-    icon: ClipboardList,
-    path: "/purchase-orders",
-    roles: ["ADMIN", "MANAGER"],
-  },
-  {
-    label: "Team",
-    section: "Admin",
-    icon: UserCog,
-    path: "/users",
-    roles: ["ADMIN"],
-  },
-  {
-    label: "Store Settings",
-    section: "Admin",
-    icon: Settings,
-    path: "/settings",
-    roles: ["ADMIN"],
-  },
-];
-
 export default function Sidebar({ collapsed, onToggle, mobile, onNavigate }: SidebarProps) {
   const user = useAuthStore((s) => s.user);
+  const { data: store } = useStoreSettings();
+  const storeName = store?.tradeName || store?.legalName || "Inventory POS";
   const location = useLocation();
 
   const visibleItems = navItems.filter(
@@ -112,27 +29,23 @@ export default function Sidebar({ collapsed, onToggle, mobile, onNavigate }: Sid
   return (
     <aside
       className={cn(
-        "flex flex-col bg-sidebar",
+        "flex flex-col bg-sidebar-fill text-sidebar-foreground",
         mobile
           ? "h-full w-full"
-          : "fixed inset-y-0 left-0 z-30 border-r border-border/50 transition-[width] duration-300 ease-in-out",
+          : "fixed inset-y-0 left-0 z-30 border-r border-sidebar-border transition-[width] duration-300 ease-in-out",
         !mobile && (collapsed ? "w-[68px]" : "w-[240px]")
       )}
     >
       {/* Logo */}
-      <div className="flex h-16 items-center border-b border-border/50 px-4">
+      <div className="flex h-16 items-center border-b border-sidebar-border px-4">
         <div className="flex items-center gap-3 overflow-hidden">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 shadow-md shadow-blue-500/20">
-            <Package className="h-5 w-5 text-white" />
-          </div>
+          <BrandMark />
           {!collapsed && (
             <div className="flex flex-col overflow-hidden">
-              <span className="truncate text-sm font-bold tracking-tight text-foreground">
-                Inventory POS
+              <span className="truncate font-heading text-[15px] font-bold text-sidebar-accent-foreground">
+                {storeName}
               </span>
-              <span className="truncate text-[11px] text-muted-foreground">
-                Store management
-              </span>
+              <span className="truncate text-[11px] text-sidebar-foreground/60">Billing &amp; inventory</span>
             </div>
           )}
         </div>
@@ -145,9 +58,9 @@ export default function Sidebar({ collapsed, onToggle, mobile, onNavigate }: Sid
           return (
             <div key={section} className={cn(sectionIndex > 0 && "mt-5")}>
               {collapsed ? (
-                sectionIndex > 0 && <div className="mx-2 mb-3 h-px bg-border/60" />
+                sectionIndex > 0 && <div className="mx-2 mb-3 h-px bg-sidebar-border" />
               ) : (
-                <p className="mb-1.5 px-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/70">
+                <p className="mb-1.5 px-3 text-[10.5px] font-semibold uppercase tracking-[0.12em] text-sidebar-foreground/45">
                   {section}
                 </p>
               )}
@@ -168,14 +81,17 @@ export default function Sidebar({ collapsed, onToggle, mobile, onNavigate }: Sid
                         "group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                         collapsed && "justify-center px-0",
                         isActive
-                          ? "bg-primary/10 text-primary"
-                          : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                          ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                          : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
                       )}
                     >
+                      {isActive && !collapsed && (
+                        <span className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-sidebar-primary" />
+                      )}
                       <item.icon
                         className={cn(
                           "h-[18px] w-[18px] shrink-0 transition-colors",
-                          isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+                          isActive ? "text-sidebar-primary" : "text-sidebar-foreground/55 group-hover:text-sidebar-accent-foreground"
                         )}
                       />
                       {!collapsed && <span className="truncate">{item.label}</span>}
@@ -202,12 +118,12 @@ export default function Sidebar({ collapsed, onToggle, mobile, onNavigate }: Sid
       </nav>
 
       {/* Collapse toggle */}
-      <div className={cn("border-t border-border/50 p-3", mobile && "hidden")}>
+      <div className={cn("border-t border-sidebar-border p-3", mobile && "hidden")}>
         <Button
           variant="ghost"
           size="sm"
           onClick={onToggle}
-          className="w-full justify-center text-muted-foreground hover:text-foreground"
+          className="w-full justify-center text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
         >
           {collapsed ? (
             <ChevronRight className="h-4 w-4" />

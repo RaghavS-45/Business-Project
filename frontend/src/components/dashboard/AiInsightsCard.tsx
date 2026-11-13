@@ -59,12 +59,12 @@ export default function AiInsightsCard({ range }: { range: DateRange }) {
   };
 
   return (
-    <Card className="border-border/50 bg-card hover:border-blue-500/20 transition-colors">
+    <Card className="border-border/50 bg-card hover:border-primary/20 transition-colors">
       <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
         <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+          <Sparkles className="h-4 w-4 text-primary" />
           AI Insights
-          <span className="text-xs font-normal text-blue-600/80 dark:text-blue-400/80">· {label}</span>
+          <span className="text-xs font-normal text-primary/80">· {label}</span>
         </CardTitle>
         <Button
           variant="ghost"

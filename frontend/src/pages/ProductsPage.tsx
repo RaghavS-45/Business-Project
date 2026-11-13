@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useProducts, useDeleteProduct } from "@/hooks/useProducts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -84,6 +85,32 @@ export default function ProductsPage() {
     setDialogOpen(true);
   };
 
+  // Links from the command palette: ?search=…, ?new=1, ?edit=<id>
+  // Handled while rendering (React's "adjust state on change" pattern):
+  // each link is acted on once; ?edit waits until that product is loaded.
+  const [params] = useSearchParams();
+  const linkKey = params.toString();
+  const [handledLink, setHandledLink] = useState("");
+  if (linkKey && linkKey !== handledLink) {
+    const paramSearch = params.get("search");
+    const paramEdit = params.get("edit");
+    const found = paramEdit ? products.find((p: { _id: string }) => p._id === paramEdit) : null;
+    if (paramSearch !== null && paramSearch !== search) {
+      setSearch(paramSearch);
+      setPage(1);
+    } else if (!paramEdit || found || !isLoading) {
+      setHandledLink(linkKey);
+      if (params.get("new")) {
+        setEditingProduct(null);
+        setDialogOpen(true);
+      }
+      if (found) {
+        setEditingProduct(found);
+        setDialogOpen(true);
+      }
+    }
+  }
+
   const stockBadge = (stock: number, threshold: number) => {
     if (stock === 0)
       return <Badge variant="destructive" className="text-[10px]">Out of stock</Badge>;
@@ -106,7 +133,7 @@ export default function ProductsPage() {
             setEditingProduct(null);
             setDialogOpen(true);
           }}
-          className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shadow-md shadow-blue-500/20"
+          
         >
           <Plus className="mr-2 h-4 w-4" />
           Add Product

@@ -244,7 +244,7 @@ export default function PurchaseOrderForm({ onSuccess }: Props) {
         <Button
           type="submit"
           disabled={createPO.isPending}
-          className="bg-gradient-to-r from-blue-500 to-blue-600 text-white"
+          
         >
           {createPO.isPending ? (
             <>

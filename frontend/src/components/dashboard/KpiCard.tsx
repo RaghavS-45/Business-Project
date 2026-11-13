@@ -4,11 +4,12 @@ import { cn } from "@/lib/utils";
 
 type Tone = "blue" | "emerald" | "amber" | "violet";
 
+// Gradient icon tiles — the splash of colour on each card
 const TONES: Record<Tone, string> = {
-  blue: "bg-blue-500/10 text-blue-600 dark:text-blue-400",
-  emerald: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-  amber: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
-  violet: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
+  blue: "bg-linear-to-br from-primary/75 to-primary shadow-primary/30",
+  emerald: "bg-linear-to-br from-emerald-400 to-teal-600 shadow-emerald-500/30",
+  amber: "bg-linear-to-br from-amber-400 to-orange-500 shadow-orange-500/30",
+  violet: "bg-linear-to-br from-fuchsia-500 to-rose-500 shadow-rose-500/30",
 };
 
 interface KpiCardProps {
@@ -31,7 +32,12 @@ export default function KpiCard({
   className,
 }: KpiCardProps) {
   return (
-    <Card className={cn("py-0 border-border/50 transition-colors hover:border-border", className)}>
+    <Card
+      className={cn(
+        "py-0 border-border/50 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md",
+        className
+      )}
+    >
       <CardContent className="p-4 sm:p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 space-y-1.5">
@@ -58,7 +64,7 @@ export default function KpiCard({
           </div>
           <div
             className={cn(
-              "hidden sm:flex h-10 w-10 shrink-0 items-center justify-center rounded-lg [&_svg]:h-5 [&_svg]:w-5",
+              "hidden sm:flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-white shadow-lg [&_svg]:h-5 [&_svg]:w-5",
               TONES[tone]
             )}
           >

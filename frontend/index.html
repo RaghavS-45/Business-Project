@@ -5,17 +5,20 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Inventory & Point of Sale Management System — manage products, process sales, track customers." />
-    <meta name="theme-color" content="#0a0a0a" />
+    <meta name="theme-color" content="#14211c" />
     <link rel="apple-touch-icon" href="/pwa-192x192.png" />
     <title>Inventory POS</title>
     <script>
-      // Apply the saved theme before first paint (dark by default)
+      // Apply the saved theme before first paint (light by default)
       (function () {
-        var t = "dark";
-        try { t = localStorage.getItem("theme") || "dark"; } catch (e) {}
+        var t = "light";
+        try { t = localStorage.getItem("theme") || "light"; } catch (e) {}
         var root = document.documentElement;
         root.classList.toggle("dark", t === "dark");
         root.style.colorScheme = t;
+        var p = "peacock";
+        try { p = localStorage.getItem("palette") || "peacock"; } catch (e) {}
+        root.dataset.palette = p;
       })();
     </script>
   </head>
